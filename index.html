@@ -1182,13 +1182,8 @@
 <!-- INFORME PRINT WRAPPER (solo visible al imprimir con clase en body) -->
 <div class="informe-print-wrap" id="informe-print-wrap"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
-// ── EMAILJS CONFIG ────────────────────────────────────────────────────────────
-const EMAILJS_PUBLIC_KEY  = '_DYALGXX2UWf8GgUm';
-const EMAILJS_SERVICE_ID  = 'service_2bplw7r';
-const EMAILJS_TEMPLATE_ID = 'template_inspeccion'; // Crear con este nombre en EmailJS
-
 // ── MAPEO ÁREA → CORREOS ──────────────────────────────────────────────────────
 const AREA_EMAILS = {
   'Planta Producto Elaborado': [
@@ -1286,130 +1281,146 @@ function hideSendStatus() {
   document.getElementById('send-status').className = 'send-status';
 }
 
-// ── GENERAR HTML DEL INFORME PARA EL EMAIL ───────────────────────────────────
-function buildEmailHtml() {
-  const fecha = document.getElementById('meta-fecha').value || '—';
-  const hora  = document.getElementById('meta-hora').value  || '—';
-  const area  = document.getElementById('meta-area').value  || '—';
-  const insp  = document.getElementById('meta-inspector').value || '—';
-  const sup   = document.getElementById('meta-supervisor').value || '—';
-
-  const typeLabel = { nc: 'No Conforme', obs: 'Observación', om: 'Oportunidad de Mejora' };
-  const typeColor = { nc: '#c0392b', obs: '#7f8c8d', om: '#d35400' };
-  const typeBg    = { nc: '#fdecea', obs: '#f5f5f5', om: '#fef3ec' };
-  const sevColor  = { 'Crítica': '#c0392b', 'Mayor': '#e67e22', 'Menor': '#3498db' };
-
-  let rows = '';
-  let globalIdx = 1;
-  let counts = { nc: 0, obs: 0, om: 0 };
-
-  SECTIONS.forEach(section => {
-    let sectionRows = '';
-    section.items.forEach(pregunta => {
-      const rowId = `row_${section.id}_${globalIdx}`;
-      const s = state[rowId];
-      if (s && (s.hallazgo === 'nc' || s.hallazgo === 'obs' || s.hallazgo === 'om')) {
-        counts[s.hallazgo]++;
-        const evTxt = s.evidence && s.evidence.length > 0
-          ? `<br><span style="font-size:11px;color:#666;">📎 ${s.evidence.length} evidencia(s) adjunta(s) — ver PDF</span>` : '';
-        const comTxt = s.comentario
-          ? `<br><em style="font-size:11px;color:#666;">💬 ${s.comentario}</em>` : '';
-        const sevHtml = s.severidad
-          ? `<span style="background:${sevColor[s.severidad]||'#ccc'};color:white;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;">${s.severidad}</span>` : '';
-        sectionRows += `
-          <tr style="background:${typeBg[s.hallazgo]};">
-            <td style="padding:8px 10px;border-bottom:1px solid #eee;font-family:monospace;font-size:11px;color:#aaa;width:28px;">${String(globalIdx).padStart(2,'0')}</td>
-            <td style="padding:8px 10px;border-bottom:1px solid #eee;font-size:12px;">${pregunta}${comTxt}${evTxt}</td>
-            <td style="padding:8px 10px;border-bottom:1px solid #eee;white-space:nowrap;">
-              <span style="background:${typeColor[s.hallazgo]};color:white;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;">${typeLabel[s.hallazgo]}</span>
-            </td>
-            <td style="padding:8px 10px;border-bottom:1px solid #eee;">${sevHtml}</td>
-          </tr>`;
-      }
-      globalIdx++;
-    });
-
-    if (sectionRows) {
-      rows += `<tr><td colspan="4" style="background:#1B5E99;color:white;padding:6px 10px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">${section.title}</td></tr>`;
-      rows += sectionRows;
-    }
-  });
-
-  const total = counts.nc + counts.obs + counts.om;
-  if (total === 0) return null;
-
-  return `
-  <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:700px;margin:0 auto;border:1px solid #ddd;border-radius:8px;overflow:hidden;">
-    <div style="background:#1B5E99;color:white;padding:18px 22px;">
-      <h2 style="margin:0;font-size:16px;">⚠️ Informe de Hallazgos — Inspección Interna</h2>
-      <p style="margin:4px 0 0;font-size:11px;opacity:.8;">R-SIG-II 02 | Maniagro Argentina | ${new Date().toLocaleString('es-AR')}</p>
-    </div>
-    <div style="background:#f0f4f8;padding:10px 22px;display:flex;gap:20px;flex-wrap:wrap;font-size:12px;border-bottom:1px solid #ddd;">
-      <span><b style="color:#1B5E99;">Fecha:</b> ${fecha}</span>
-      <span><b style="color:#1B5E99;">Hora:</b> ${hora}</span>
-      <span><b style="color:#1B5E99;">Área:</b> ${area}</span>
-      <span><b style="color:#1B5E99;">Inspeccionó:</b> ${insp}</span>
-      <span><b style="color:#1B5E99;">Supervisor:</b> ${sup}</span>
-    </div>
-    <table style="width:100%;border-collapse:collapse;">
-      <thead>
-        <tr style="background:#f0f4f8;">
-          <th style="padding:7px 10px;text-align:left;font-size:10px;color:#1B5E99;border-bottom:2px solid #ddd;">#</th>
-          <th style="padding:7px 10px;text-align:left;font-size:10px;color:#1B5E99;border-bottom:2px solid #ddd;">Criterio</th>
-          <th style="padding:7px 10px;text-align:left;font-size:10px;color:#1B5E99;border-bottom:2px solid #ddd;">Tipo</th>
-          <th style="padding:7px 10px;text-align:left;font-size:10px;color:#1B5E99;border-bottom:2px solid #ddd;">Severidad</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
-    <div style="background:#f0f4f8;padding:10px 22px;font-size:12px;border-top:1px solid #ddd;display:flex;gap:20px;">
-      <span><b style="color:#1B5E99;">Total:</b> ${total}</span>
-      <span><b style="color:#c0392b;">No Conformes:</b> ${counts.nc}</span>
-      <span><b style="color:#7f8c8d;">Observaciones:</b> ${counts.obs}</span>
-      <span><b style="color:#d35400;">Oportunidades:</b> ${counts.om}</span>
-    </div>
-    <div style="background:#1B6B35;color:white;padding:8px 22px;font-size:10px;opacity:.9;">
-      Enviado automáticamente desde el sistema R-SIG-II 02 | rgutierrez@maniagro.com
-    </div>
-  </div>`;
-}
-
 async function sendEmailReport() {
   if (currentRecipients.length === 0) {
     showSendStatus('error', '⚠️ No hay destinatarios. Agregá al menos un correo.');
     return;
   }
 
-  const htmlBody = buildEmailHtml();
-  if (!htmlBody) {
+  // Verificar que haya hallazgos
+  const hayHallazgos = Object.values(state).some(s => s.hallazgo === 'nc' || s.hallazgo === 'obs' || s.hallazgo === 'om');
+  if (!hayHallazgos) {
     showSendStatus('error', '⚠️ No hay hallazgos para enviar.');
     return;
   }
 
   const btn = document.getElementById('btn-send-email');
   btn.disabled = true;
-  showSendStatus('sending', '⏳ Enviando informe...');
+  showSendStatus('sending', '⏳ Generando captura del informe...');
 
   const area  = document.getElementById('meta-area').value  || '—';
   const fecha = document.getElementById('meta-fecha').value || '—';
-  const insp  = document.getElementById('meta-inspector').value || '—';
 
   try {
-    emailjs.init(EMAILJS_PUBLIC_KEY);
-    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-      to_email:    currentRecipients.join(','),
-      from_name:   'Sistema R-SIG-II 02 — Maniagro Argentina',
-      reply_to:    'rgutierrez@maniagro.com',
-      subject:     `⚠️ Informe de Hallazgos — ${area} | ${fecha}`,
-      inspector:   insp,
-      area:        area,
-      fecha:       fecha,
-      html_body:   htmlBody,
+    // 1. Capturar el contenido del modal como imagen
+    const reportBody = document.getElementById('report-content');
+    const metaBar    = document.getElementById('report-meta-bar');
+
+    // Crear contenedor temporal para captura limpia
+    const captureWrap = document.createElement('div');
+    captureWrap.style.cssText = `
+      position:fixed; left:-9999px; top:0;
+      width:1200px; background:white; padding:24px;
+      font-family:'IBM Plex Sans',Arial,sans-serif;
+    `;
+
+    // Header del informe
+    captureWrap.innerHTML = `
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:14px;padding-bottom:12px;border-bottom:3px solid #1B5E99;">
+        <img src="${LOGO_B64}" style="height:60px;" alt="Maniagro">
+        <div>
+          <div style="font-size:16px;font-weight:700;color:#1B5E99;">⚠️ Informe de Hallazgos — Inspección Interna</div>
+          <div style="font-size:11px;color:#888;margin-top:3px;">R-SIG-II 02 | Maniagro Argentina | ${new Date().toLocaleString('es-AR')}</div>
+        </div>
+      </div>
+      ${metaBar.outerHTML}
+    `;
+
+    // Clonar el contenido del reporte
+    const clonedContent = reportBody.cloneNode(true);
+    // Remover botones de evidencia que no aplican en la captura
+    clonedContent.querySelectorAll('.evidence-btn, .remove-ev').forEach(el => el.remove());
+    captureWrap.appendChild(clonedContent);
+    document.body.appendChild(captureWrap);
+
+    const canvas = await html2canvas(captureWrap, {
+      scale: 1.5,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      width: 1200,
+      windowWidth: 1200,
     });
-    showSendStatus('success', `✅ Informe enviado correctamente a ${currentRecipients.length} destinatario(s).`);
+
+    document.body.removeChild(captureWrap);
+
+    // 2. Convertir canvas a blob y descargar como imagen
+    canvas.toBlob(blob => {
+      const imgUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = imgUrl;
+      a.download = `Informe_Hallazgos_${area.replace(/[^a-zA-Z0-9]/g,'_')}_${fecha}.png`.replace(/__+/g,'_');
+      a.click();
+      URL.revokeObjectURL(imgUrl);
+
+      // 3. Construir el cuerpo del correo en texto plano
+      const insp  = document.getElementById('meta-inspector').value || '—';
+      const sup   = document.getElementById('meta-supervisor').value || '—';
+      const hora  = document.getElementById('meta-hora').value || '—';
+
+      let counts = { nc: 0, obs: 0, om: 0 };
+      let lineas = [];
+      let globalIdx = 1;
+      SECTIONS.forEach(section => {
+        let secLineas = [];
+        section.items.forEach(pregunta => {
+          const rowId = `row_${section.id}_${globalIdx}`;
+          const s = state[rowId];
+          if (s && (s.hallazgo === 'nc' || s.hallazgo === 'obs' || s.hallazgo === 'om')) {
+            counts[s.hallazgo]++;
+            const tipo = { nc:'NO CONFORME', obs:'OBSERVACIÓN', om:'OPORTUNIDAD DE MEJORA' }[s.hallazgo];
+            const sev  = s.severidad ? ` | Severidad: ${s.severidad}` : '';
+            const com  = s.comentario ? `\n   Comentario: ${s.comentario}` : '';
+            secLineas.push(`  ${String(globalIdx).padStart(2,'0')}. [${tipo}${sev}]\n   ${pregunta}${com}`);
+          }
+          globalIdx++;
+        });
+        if (secLineas.length) {
+          lineas.push(`\n── ${section.title.toUpperCase()} ──`);
+          lineas.push(...secLineas);
+        }
+      });
+
+      const total = counts.nc + counts.obs + counts.om;
+      const cuerpo =
+`Estimados,
+
+Se adjunta el informe de hallazgos correspondiente a la inspección interna realizada en:
+
+  Área:         ${area}
+  Fecha:        ${fecha}
+  Hora:         ${hora}
+  Inspeccionó:  ${insp}
+  Supervisor:   ${sup}
+
+RESUMEN DE HALLAZGOS (${total} en total):
+  • No Conformes:          ${counts.nc}
+  • Observaciones:         ${counts.obs}
+  • Oportunidades de Mejora: ${counts.om}
+
+DETALLE:
+${lineas.join('\n')}
+
+─────────────────────────────────────────
+⚠️ La imagen del informe fue descargada automáticamente.
+   Por favor adjuntarla manualmente antes de enviar.
+─────────────────────────────────────────
+
+Sistema R-SIG-II 02 — Maniagro Argentina
+rgutierrez@maniagro.com`;
+
+      const subject = encodeURIComponent(`⚠️ Informe de Hallazgos — ${area} | ${fecha}`);
+      const body    = encodeURIComponent(cuerpo);
+      const to      = currentRecipients.join(',');
+
+      // 4. Abrir cliente de correo
+      window.location.href = `mailto:${to}?subject=${subject}&body=${body}`;
+
+      showSendStatus('success', '✅ Se descargó la imagen del informe y se abrió tu cliente de correo. Adjuntá la imagen antes de enviar.');
+    }, 'image/png');
+
   } catch (err) {
-    console.error('EmailJS error:', err);
-    showSendStatus('error', `❌ Error al enviar: ${err.text || err.message || 'verificá la configuración de EmailJS.'}`);
+    console.error('Error generando informe:', err);
+    showSendStatus('error', `❌ Error al generar la captura: ${err.message}`);
   } finally {
     btn.disabled = false;
   }
