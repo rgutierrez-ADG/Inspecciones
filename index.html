@@ -602,6 +602,7 @@
 
   /* ── PDF PRINT ── */
   @media print {
+    @page { margin: 10mm; size: auto; }
     body { background: white; font-size: 10px; }
     .actions-bar { display: none !important; }
     .modal-overlay { display: none !important; }
@@ -822,7 +823,89 @@
     border-radius: 0 0 12px 12px;
   }
 
-  /* ── INFORME PRINT ── */
+  /* ── EMAIL SEND ── */
+  .email-recipients-box {
+    background: var(--gris-bg);
+    border: 1px solid var(--gris-borde);
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-top: 10px;
+    font-size: 11px;
+  }
+  .email-recipients-box .er-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--azul);
+    margin-bottom: 6px;
+  }
+  .email-recipients-box .er-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .er-chip {
+    background: white;
+    border: 1px solid var(--gris-borde);
+    border-radius: 12px;
+    padding: 2px 10px;
+    font-size: 10px;
+    color: #555;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .er-chip-remove {
+    cursor: pointer;
+    color: #aaa;
+    font-weight: 700;
+    line-height: 1;
+    font-size: 12px;
+  }
+  .er-chip-remove:hover { color: var(--no-conforme); }
+  .er-add-input {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+  }
+  .er-add-input input {
+    flex: 1;
+    border: 1px solid var(--gris-borde);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 11px;
+    font-family: 'IBM Plex Sans', sans-serif;
+  }
+  .er-add-input input:focus { outline: none; border-color: var(--azul); }
+  .er-add-input button {
+    background: var(--azul);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 11px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .btn-send-email {
+    background: var(--verde) !important;
+    color: white !important;
+    border: none !important;
+  }
+  .btn-send-email:hover { background: #155228 !important; }
+  .btn-send-email:disabled { background: #aaa !important; cursor: not-allowed !important; }
+  .send-status {
+    font-size: 11px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    display: none;
+    align-items: center;
+    gap: 6px;
+  }
+  .send-status.success { background: var(--verde-claro); color: var(--verde); border: 1px solid #b5dfc0; display: flex; }
+  .send-status.error { background: var(--rojo-claro); color: var(--no-conforme); border: 1px solid #f5c6c3; display: flex; }
+  .send-status.sending { background: var(--azul-claro); color: var(--azul); border: 1px solid #b8d4ed; display: flex; }
   @media print {
     .report-modal-overlay { display: none !important; }
   }
@@ -1076,8 +1159,22 @@
       <div id="report-content"></div>
     </div>
     <div class="report-footer">
-      <button class="btn btn-secondary" onclick="closeReport()">Cerrar</button>
-      <button class="btn btn-primary" onclick="printReport()">🖨️ Imprimir Informe</button>
+      <div style="flex:1;">
+        <div class="email-recipients-box" id="email-box">
+          <div class="er-label">📧 Enviar a:</div>
+          <div class="er-chips" id="er-chips"></div>
+          <div class="er-add-input">
+            <input type="email" id="er-new-email" placeholder="Agregar correo adicional...">
+            <button onclick="addEmailChip()">+ Agregar</button>
+          </div>
+        </div>
+        <div class="send-status" id="send-status"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-secondary" onclick="closeReport()">Cerrar</button>
+        <button class="btn btn-primary" onclick="printReport()">🖨️ Imprimir</button>
+        <button class="btn btn-send-email" id="btn-send-email" onclick="sendEmailReport()">📧 Enviar Informe</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1085,8 +1182,238 @@
 <!-- INFORME PRINT WRAPPER (solo visible al imprimir con clase en body) -->
 <div class="informe-print-wrap" id="informe-print-wrap"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script>
-// ── DATA ──────────────────────────────────────────────────────────────────────
+// ── EMAILJS CONFIG ────────────────────────────────────────────────────────────
+const EMAILJS_PUBLIC_KEY  = '_DYALGXX2UWf8GgUm';
+const EMAILJS_SERVICE_ID  = 'service_2bplw7r';
+const EMAILJS_TEMPLATE_ID = 'template_inspeccion'; // Crear con este nombre en EmailJS
+
+// ── MAPEO ÁREA → CORREOS ──────────────────────────────────────────────────────
+const AREA_EMAILS = {
+  'Planta Producto Elaborado': [
+    'produccionpe@maniagro.com',
+    'dmartina@maniagro.com',
+    'smignola@croppers.com',
+    'mbosso@maniagro.com'
+  ],
+  'Planta HPS1 - Dep. Pulmón HPS1': [
+    'sup.maniconfiteria@maniagro.com',
+    'rpratto@maniagro.com',
+    'mquiroga@maniagro.com'
+  ],
+  'Planta HPS2': [
+    'sup.hps2@maniagro.com',
+    'rpratto@maniagro.com',
+    'mquiroga@maniagro.com'
+  ],
+  'Planta Blancheado': [
+    'sup.maniblancheado@maniagro.com',
+    'gprattomaniagro.com',
+    'mquiroga@maniagro.com'
+  ],
+  'Planta Alérgenos': [
+    'supervisorpecontacc@maniagro.com',
+    'smignola@croppers.com',
+    'mbosso@maniagro.com'
+  ],
+  'Depósitos D1 - D2 - D3 - Carga y Pre Carga': [
+    'lpratto@maniagro.com',
+    'mquiroga@maniagro.com'
+  ],
+  'Taller de Mantenimiento - Vehículos': [
+    'mgimenez@maniagro.com'
+  ],
+  'Pañol': [
+    'ecifre@maniagro.com',
+    'eeroles@maniagro.com'
+  ],
+  'Insumos': [
+    'insumos@maniagro.com.ar',
+    'aaltamirano@maniagro.com',
+    'eeroles@maniagro.com'
+  ]
+};
+
+// Estado de destinatarios en el modal
+let currentRecipients = [];
+
+function loadEmailsForArea(area) {
+  currentRecipients = area && AREA_EMAILS[area] ? [...AREA_EMAILS[area]] : [];
+  renderEmailChips();
+}
+
+function renderEmailChips() {
+  const container = document.getElementById('er-chips');
+  container.innerHTML = '';
+  currentRecipients.forEach((email, i) => {
+    const chip = document.createElement('span');
+    chip.className = 'er-chip';
+    chip.innerHTML = `📨 ${email} <span class="er-chip-remove" onclick="removeEmailChip(${i})">×</span>`;
+    container.appendChild(chip);
+  });
+}
+
+function removeEmailChip(i) {
+  currentRecipients.splice(i, 1);
+  renderEmailChips();
+}
+
+function addEmailChip() {
+  const input = document.getElementById('er-new-email');
+  const val = input.value.trim();
+  if (!val) return;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+    showSendStatus('error', '⚠️ El correo ingresado no es válido.');
+    return;
+  }
+  if (currentRecipients.includes(val)) {
+    showSendStatus('error', '⚠️ Ese correo ya está en la lista.');
+    return;
+  }
+  currentRecipients.push(val);
+  input.value = '';
+  renderEmailChips();
+  hideSendStatus();
+}
+
+function showSendStatus(type, msg) {
+  const el = document.getElementById('send-status');
+  el.className = `send-status ${type}`;
+  el.textContent = msg;
+}
+function hideSendStatus() {
+  document.getElementById('send-status').className = 'send-status';
+}
+
+// ── GENERAR HTML DEL INFORME PARA EL EMAIL ───────────────────────────────────
+function buildEmailHtml() {
+  const fecha = document.getElementById('meta-fecha').value || '—';
+  const hora  = document.getElementById('meta-hora').value  || '—';
+  const area  = document.getElementById('meta-area').value  || '—';
+  const insp  = document.getElementById('meta-inspector').value || '—';
+  const sup   = document.getElementById('meta-supervisor').value || '—';
+
+  const typeLabel = { nc: 'No Conforme', obs: 'Observación', om: 'Oportunidad de Mejora' };
+  const typeColor = { nc: '#c0392b', obs: '#7f8c8d', om: '#d35400' };
+  const typeBg    = { nc: '#fdecea', obs: '#f5f5f5', om: '#fef3ec' };
+  const sevColor  = { 'Crítica': '#c0392b', 'Mayor': '#e67e22', 'Menor': '#3498db' };
+
+  let rows = '';
+  let globalIdx = 1;
+  let counts = { nc: 0, obs: 0, om: 0 };
+
+  SECTIONS.forEach(section => {
+    let sectionRows = '';
+    section.items.forEach(pregunta => {
+      const rowId = `row_${section.id}_${globalIdx}`;
+      const s = state[rowId];
+      if (s && (s.hallazgo === 'nc' || s.hallazgo === 'obs' || s.hallazgo === 'om')) {
+        counts[s.hallazgo]++;
+        const evTxt = s.evidence && s.evidence.length > 0
+          ? `<br><span style="font-size:11px;color:#666;">📎 ${s.evidence.length} evidencia(s) adjunta(s) — ver PDF</span>` : '';
+        const comTxt = s.comentario
+          ? `<br><em style="font-size:11px;color:#666;">💬 ${s.comentario}</em>` : '';
+        const sevHtml = s.severidad
+          ? `<span style="background:${sevColor[s.severidad]||'#ccc'};color:white;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;">${s.severidad}</span>` : '';
+        sectionRows += `
+          <tr style="background:${typeBg[s.hallazgo]};">
+            <td style="padding:8px 10px;border-bottom:1px solid #eee;font-family:monospace;font-size:11px;color:#aaa;width:28px;">${String(globalIdx).padStart(2,'0')}</td>
+            <td style="padding:8px 10px;border-bottom:1px solid #eee;font-size:12px;">${pregunta}${comTxt}${evTxt}</td>
+            <td style="padding:8px 10px;border-bottom:1px solid #eee;white-space:nowrap;">
+              <span style="background:${typeColor[s.hallazgo]};color:white;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;">${typeLabel[s.hallazgo]}</span>
+            </td>
+            <td style="padding:8px 10px;border-bottom:1px solid #eee;">${sevHtml}</td>
+          </tr>`;
+      }
+      globalIdx++;
+    });
+
+    if (sectionRows) {
+      rows += `<tr><td colspan="4" style="background:#1B5E99;color:white;padding:6px 10px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">${section.title}</td></tr>`;
+      rows += sectionRows;
+    }
+  });
+
+  const total = counts.nc + counts.obs + counts.om;
+  if (total === 0) return null;
+
+  return `
+  <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:700px;margin:0 auto;border:1px solid #ddd;border-radius:8px;overflow:hidden;">
+    <div style="background:#1B5E99;color:white;padding:18px 22px;">
+      <h2 style="margin:0;font-size:16px;">⚠️ Informe de Hallazgos — Inspección Interna</h2>
+      <p style="margin:4px 0 0;font-size:11px;opacity:.8;">R-SIG-II 02 | Maniagro Argentina | ${new Date().toLocaleString('es-AR')}</p>
+    </div>
+    <div style="background:#f0f4f8;padding:10px 22px;display:flex;gap:20px;flex-wrap:wrap;font-size:12px;border-bottom:1px solid #ddd;">
+      <span><b style="color:#1B5E99;">Fecha:</b> ${fecha}</span>
+      <span><b style="color:#1B5E99;">Hora:</b> ${hora}</span>
+      <span><b style="color:#1B5E99;">Área:</b> ${area}</span>
+      <span><b style="color:#1B5E99;">Inspeccionó:</b> ${insp}</span>
+      <span><b style="color:#1B5E99;">Supervisor:</b> ${sup}</span>
+    </div>
+    <table style="width:100%;border-collapse:collapse;">
+      <thead>
+        <tr style="background:#f0f4f8;">
+          <th style="padding:7px 10px;text-align:left;font-size:10px;color:#1B5E99;border-bottom:2px solid #ddd;">#</th>
+          <th style="padding:7px 10px;text-align:left;font-size:10px;color:#1B5E99;border-bottom:2px solid #ddd;">Criterio</th>
+          <th style="padding:7px 10px;text-align:left;font-size:10px;color:#1B5E99;border-bottom:2px solid #ddd;">Tipo</th>
+          <th style="padding:7px 10px;text-align:left;font-size:10px;color:#1B5E99;border-bottom:2px solid #ddd;">Severidad</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div style="background:#f0f4f8;padding:10px 22px;font-size:12px;border-top:1px solid #ddd;display:flex;gap:20px;">
+      <span><b style="color:#1B5E99;">Total:</b> ${total}</span>
+      <span><b style="color:#c0392b;">No Conformes:</b> ${counts.nc}</span>
+      <span><b style="color:#7f8c8d;">Observaciones:</b> ${counts.obs}</span>
+      <span><b style="color:#d35400;">Oportunidades:</b> ${counts.om}</span>
+    </div>
+    <div style="background:#1B6B35;color:white;padding:8px 22px;font-size:10px;opacity:.9;">
+      Enviado automáticamente desde el sistema R-SIG-II 02 | rgutierrez@maniagro.com
+    </div>
+  </div>`;
+}
+
+async function sendEmailReport() {
+  if (currentRecipients.length === 0) {
+    showSendStatus('error', '⚠️ No hay destinatarios. Agregá al menos un correo.');
+    return;
+  }
+
+  const htmlBody = buildEmailHtml();
+  if (!htmlBody) {
+    showSendStatus('error', '⚠️ No hay hallazgos para enviar.');
+    return;
+  }
+
+  const btn = document.getElementById('btn-send-email');
+  btn.disabled = true;
+  showSendStatus('sending', '⏳ Enviando informe...');
+
+  const area  = document.getElementById('meta-area').value  || '—';
+  const fecha = document.getElementById('meta-fecha').value || '—';
+  const insp  = document.getElementById('meta-inspector').value || '—';
+
+  try {
+    emailjs.init(EMAILJS_PUBLIC_KEY);
+    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+      to_email:    currentRecipients.join(','),
+      from_name:   'Sistema R-SIG-II 02 — Maniagro Argentina',
+      reply_to:    'rgutierrez@maniagro.com',
+      subject:     `⚠️ Informe de Hallazgos — ${area} | ${fecha}`,
+      inspector:   insp,
+      area:        area,
+      fecha:       fecha,
+      html_body:   htmlBody,
+    });
+    showSendStatus('success', `✅ Informe enviado correctamente a ${currentRecipients.length} destinatario(s).`);
+  } catch (err) {
+    console.error('EmailJS error:', err);
+    showSendStatus('error', `❌ Error al enviar: ${err.text || err.message || 'verificá la configuración de EmailJS.'}`);
+  } finally {
+    btn.disabled = false;
+  }
+}
 const SECTIONS = [
   {
     id: 'orden',
@@ -1520,16 +1847,21 @@ function applyReportFilters() {
 function openReport() {
   const content = document.getElementById('report-content');
   content.innerHTML = '';
+  hideSendStatus();
+
+  // Cargar emails del área seleccionada
+  const area = document.getElementById('meta-area').value;
+  loadEmailsForArea(area);
 
   // Meta bar
   const fecha = document.getElementById('meta-fecha').value || '—';
   const hora  = document.getElementById('meta-hora').value  || '—';
-  const area  = document.getElementById('meta-area').value  || '—';
+  const areaLabel = area || '—';
   const insp  = document.getElementById('meta-inspector').value || '—';
   const sup   = document.getElementById('meta-supervisor').value || '—';
   document.getElementById('report-meta-bar').innerHTML =
     `<span><b>Fecha:</b> ${fecha}</span><span><b>Hora:</b> ${hora}</span>` +
-    `<span><b>Área:</b> ${area}</span><span><b>Inspeccionó:</b> ${insp}</span>` +
+    `<span><b>Área:</b> ${areaLabel}</span><span><b>Inspeccionó:</b> ${insp}</span>` +
     `<span><b>Supervisor:</b> ${sup}</span>`;
 
   let globalIdx = 1;
