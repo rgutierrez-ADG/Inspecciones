@@ -1107,10 +1107,15 @@
       <div class="progress-bar-fill" id="progress-fill" style="width:0%"></div>
     </div>
   </div>
+  <div id="drive-status" style="font-size:11px;display:flex;align-items:center;gap:6px;"></div>
   <div class="spacer"></div>
   <button class="btn btn-danger" onclick="resetForm()">🗑 Limpiar</button>
   <button class="btn btn-secondary" onclick="openReport()" id="btn-report" style="background:#fff3e0;color:#d35400;border-color:#f5c6a0;">⚠️ Informe de Hallazgos</button>
-  <button class="btn btn-primary" onclick="exportPDF()">📄 Descargar PDF</button>
+  <button class="btn" id="btn-drive-auth" onclick="driveAuth()" style="background:#fff;color:#444;border:1px solid #ddd;display:flex;align-items:center;gap:6px;">
+    <img src="https://www.gstatic.com/images/branding/product/1x/drive_2020q4_32dp.png" style="height:16px;">
+    Conectar Drive
+  </button>
+  <button class="btn btn-primary" onclick="exportPDF()">📄 Guardar en Drive</button>
 </div>
 
 <!-- MODAL EVIDENCIA -->
@@ -1182,9 +1187,236 @@
 <!-- INFORME PRINT WRAPPER (solo visible al imprimir con clase en body) -->
 <div class="informe-print-wrap" id="informe-print-wrap"></div>
 
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
-// ── MAPEO ÁREA → CORREOS ──────────────────────────────────────────────────────
+// ── GOOGLE DRIVE CONFIG ───────────────────────────────────────────────────────
+const DRIVE_CLIENT_ID   = '528727050289-ee9ucte32ncqfaf23muvtis4tbn36spa.apps.googleusercontent.com';
+const DRIVE_SCOPE       = 'https://www.googleapis.com/auth/drive.file';
+const DRIVE_ROOT_FOLDER = '1KZvafrxwLqdLQ6FXXSF9kS7FSo0CHT4S';
+
+let driveAccessToken = null;
+let driveTokenClient = null;
+let driveAuthResolve = null;
+
+function initDriveClient() {
+  if (!window.google) return;
+  driveTokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: DRIVE_CLIENT_ID,
+    scope: DRIVE_SCOPE,
+    callback: (resp) => {
+      if (resp.error) { console.error('Drive auth error:', resp); return; }
+      driveAccessToken = resp.access_token;
+      setDriveStatus('connected');
+      if (driveAuthResolve) { driveAuthResolve(resp.access_token); driveAuthResolve = null; }
+    }
+  });
+}
+
+function driveAuth() {
+  return new Promise((resolve) => {
+    if (driveAccessToken) { resolve(driveAccessToken); return; }
+    if (!driveTokenClient) { initDriveClient(); }
+    if (!driveTokenClient) { alert('El SDK de Google aún no cargó. Esperá un momento y volvé a intentar.'); return; }
+    driveAuthResolve = resolve;
+    driveTokenClient.requestAccessToken({ prompt: 'consent' });
+  });
+}
+
+function setDriveStatus(status, msg) {
+  const el = document.getElementById('drive-status');
+  if (status === 'connected') {
+    el.innerHTML = `<span style="color:#1B6B35;font-weight:600;">🔗 Drive conectado</span>`;
+  } else if (status === 'uploading') {
+    el.innerHTML = `<span style="color:#1B5E99;">⏳ ${msg || 'Subiendo a Drive...'}</span>`;
+  } else if (status === 'done') {
+    el.innerHTML = `<span style="color:#1B6B35;">✅ ${msg}</span>`;
+    setTimeout(() => setDriveStatus('connected'), 5000);
+  } else if (status === 'error') {
+    el.innerHTML = `<span style="color:#c0392b;">❌ ${msg}</span>`;
+  } else {
+    el.innerHTML = '';
+  }
+}
+
+// ── DRIVE API HELPERS ─────────────────────────────────────────────────────────
+async function driveRequest(url, method, body, contentType) {
+  const headers = { 'Authorization': `Bearer ${driveAccessToken}` };
+  if (contentType) headers['Content-Type'] = contentType;
+  const res = await fetch(url, { method, headers, body });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Drive API error ${res.status}: ${err}`);
+  }
+  return res.json();
+}
+
+async function getOrCreateFolder(name, parentId) {
+  // Search for existing folder
+  const q = encodeURIComponent(`name='${name}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`, {
+    headers: { 'Authorization': `Bearer ${driveAccessToken}` }
+  });
+  const data = await res.json();
+  if (data.files && data.files.length > 0) return data.files[0].id;
+
+  // Create if not exists
+  const created = await driveRequest(
+    'https://www.googleapis.com/drive/v3/files',
+    'POST',
+    JSON.stringify({ name, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] }),
+    'application/json'
+  );
+  return created.id;
+}
+
+async function uploadFileToDrive(fileName, blob, mimeType, parentFolderId) {
+  const meta = JSON.stringify({ name: fileName, parents: [parentFolderId] });
+  const form = new FormData();
+  form.append('metadata', new Blob([meta], { type: 'application/json' }));
+  form.append('file', blob, fileName);
+  const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${driveAccessToken}` },
+    body: form
+  });
+  if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+  return res.json();
+}
+
+// ── EXPORT PDF + DRIVE ────────────────────────────────────────────────────────
+async function exportPDF() {
+  // Asegurar token de Drive
+  let token;
+  try {
+    token = await driveAuth();
+  } catch(e) {
+    alert('No se pudo conectar con Google Drive. Verificá tu conexión.');
+    return;
+  }
+  if (!token) return;
+
+  const area  = document.getElementById('meta-area').value  || 'Sin_Area';
+  const fecha = document.getElementById('meta-fecha').value || new Date().toISOString().split('T')[0];
+  const hora  = document.getElementById('meta-hora').value  || '00-00';
+  const insp  = document.getElementById('meta-inspector').value || '';
+
+  setDriveStatus('uploading', 'Preparando carpetas...');
+
+  try {
+    // 1. Carpeta del área (subcarpeta de la raíz)
+    const areaFolderName = area.replace(/[/\\:*?"<>|]/g, '-');
+    const areaFolderId = await getOrCreateFolder(areaFolderName, DRIVE_ROOT_FOLDER);
+
+    // 2. Carpeta de la inspección (fecha + inspector)
+    const inspFolderName = `${fecha}_${hora.replace(':','-')}_${insp}`.replace(/[/\\:*?"<>|]/g,'-').replace(/\s+/g,'_');
+    const inspFolderId = await getOrCreateFolder(inspFolderName, areaFolderId);
+
+    // 3. Subir evidencias individuales por punto
+    let evIdx = 1;
+    let globalIdx = 1;
+    const evUploads = [];
+    setDriveStatus('uploading', 'Subiendo evidencias...');
+
+    for (const section of SECTIONS) {
+      for (const pregunta of section.items) {
+        const rowId = `row_${section.id}_${globalIdx}`;
+        const s = state[rowId];
+        if (s && s.evidence && s.evidence.length > 0) {
+          // Subcarpeta por punto: "01 - Pregunta..."
+          const ptName = `Punto_${String(globalIdx).padStart(2,'0')}`;
+          const ptFolderId = await getOrCreateFolder(ptName, inspFolderId);
+
+          for (let i = 0; i < s.evidence.length; i++) {
+            const ev = s.evidence[i];
+            const ext = ev.name.split('.').pop() || 'bin';
+            const evName = `${String(globalIdx).padStart(2,'0')}_ev${i+1}.${ext}`;
+            // Convert dataUrl to blob
+            const res = await fetch(ev.dataUrl);
+            const blob = await res.blob();
+            const uploaded = await uploadFileToDrive(evName, blob, ev.type, ptFolderId);
+            evUploads.push(uploaded);
+            setDriveStatus('uploading', `Evidencias: ${evUploads.length} subida(s)...`);
+          }
+        }
+        globalIdx++;
+      }
+    }
+
+    // 4. Generar y subir el PDF (usando print-to-blob via html2canvas)
+    setDriveStatus('uploading', 'Generando PDF...');
+
+    // Preparar sección de evidencias para imprimir
+    const evPrint = document.getElementById('ev-print-content');
+    evPrint.innerHTML = '';
+    let hasEvidence = false;
+    globalIdx = 1;
+    for (const section of SECTIONS) {
+      for (const pregunta of section.items) {
+        const rowId = `row_${section.id}_${globalIdx}`;
+        const s = state[rowId];
+        if (s && s.evidence && s.evidence.length > 0) {
+          hasEvidence = true;
+          const item = document.createElement('div');
+          item.className = 'ev-print-item';
+          const label = document.createElement('div');
+          label.className = 'ev-print-label';
+          label.textContent = `${String(globalIdx).padStart(2,'0')}. ${pregunta}`;
+          item.appendChild(label);
+          const imgGrid = document.createElement('div');
+          imgGrid.className = 'ev-print-images';
+          s.evidence.forEach(ev => {
+            if (ev.type && ev.type.startsWith('image/')) {
+              const img = document.createElement('img');
+              img.src = ev.dataUrl;
+              imgGrid.appendChild(img);
+            } else {
+              const p = document.createElement('p');
+              p.style.fontSize = '11px'; p.style.color = '#555';
+              p.textContent = `📎 ${ev.name}`;
+              imgGrid.appendChild(p);
+            }
+          });
+          item.appendChild(imgGrid);
+          evPrint.appendChild(item);
+        }
+        globalIdx++;
+      }
+    }
+    document.getElementById('ev-print-section').style.display = hasEvidence ? 'block' : 'none';
+
+    // Capture main form as canvas and convert to PDF-like PNG then upload
+    const captureTarget = document.getElementById('main-form');
+    const canvas = await html2canvas(document.body, {
+      scale: 1.5,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      ignoreElements: el => el.classList.contains('actions-bar') || el.classList.contains('modal-overlay') || el.classList.contains('report-modal-overlay')
+    });
+
+    const pdfName = `CheckList_${areaFolderName}_${fecha}.png`;
+    setDriveStatus('uploading', 'Subiendo PDF a Drive...');
+
+    await new Promise(resolve => {
+      canvas.toBlob(async blob => {
+        await uploadFileToDrive(pdfName, blob, 'image/png', inspFolderId);
+        resolve();
+      }, 'image/png', 0.92);
+    });
+
+    const total = evUploads.length;
+    setDriveStatus('done', `Guardado en Drive: 1 PDF + ${total} evidencia(s)`);
+
+    // También imprimir localmente
+    window.print();
+
+  } catch(err) {
+    console.error('Drive upload error:', err);
+    setDriveStatus('error', `Error: ${err.message}`);
+  }
+}
+
+// ── SEND EMAIL VIA GMAIL ──────────────────────────────────────────────────────
 const AREA_EMAILS = {
   'Planta Producto Elaborado': [
     'produccionpe@maniagro.com',
@@ -1286,8 +1518,6 @@ async function sendEmailReport() {
     showSendStatus('error', '⚠️ No hay destinatarios. Agregá al menos un correo.');
     return;
   }
-
-  // Verificar que haya hallazgos
   const hayHallazgos = Object.values(state).some(s => s.hallazgo === 'nc' || s.hallazgo === 'obs' || s.hallazgo === 'om');
   if (!hayHallazgos) {
     showSendStatus('error', '⚠️ No hay hallazgos para enviar.');
@@ -1296,25 +1526,21 @@ async function sendEmailReport() {
 
   const btn = document.getElementById('btn-send-email');
   btn.disabled = true;
-  showSendStatus('sending', '⏳ Generando captura del informe...');
+  showSendStatus('sending', '⏳ Generando imagen del informe...');
 
   const area  = document.getElementById('meta-area').value  || '—';
   const fecha = document.getElementById('meta-fecha').value || '—';
+  const hora  = document.getElementById('meta-hora').value  || '—';
+  const insp  = document.getElementById('meta-inspector').value || '—';
+  const sup   = document.getElementById('meta-supervisor').value || '—';
 
   try {
-    // 1. Capturar el contenido del modal como imagen
+    // 1. Capturar el modal como imagen a 1200px
     const reportBody = document.getElementById('report-content');
     const metaBar    = document.getElementById('report-meta-bar');
 
-    // Crear contenedor temporal para captura limpia
     const captureWrap = document.createElement('div');
-    captureWrap.style.cssText = `
-      position:fixed; left:-9999px; top:0;
-      width:1200px; background:white; padding:24px;
-      font-family:'IBM Plex Sans',Arial,sans-serif;
-    `;
-
-    // Header del informe
+    captureWrap.style.cssText = `position:fixed;left:-9999px;top:0;width:1200px;background:white;padding:24px;font-family:'IBM Plex Sans',Arial,sans-serif;`;
     captureWrap.innerHTML = `
       <div style="display:flex;align-items:center;gap:16px;margin-bottom:14px;padding-bottom:12px;border-bottom:3px solid #1B5E99;">
         <img src="${LOGO_B64}" style="height:60px;" alt="Maniagro">
@@ -1323,27 +1549,16 @@ async function sendEmailReport() {
           <div style="font-size:11px;color:#888;margin-top:3px;">R-SIG-II 02 | Maniagro Argentina | ${new Date().toLocaleString('es-AR')}</div>
         </div>
       </div>
-      ${metaBar.outerHTML}
-    `;
-
-    // Clonar el contenido del reporte
+      ${metaBar.outerHTML}`;
     const clonedContent = reportBody.cloneNode(true);
-    // Remover botones de evidencia que no aplican en la captura
-    clonedContent.querySelectorAll('.evidence-btn, .remove-ev').forEach(el => el.remove());
+    clonedContent.querySelectorAll('.evidence-btn,.remove-ev').forEach(el => el.remove());
     captureWrap.appendChild(clonedContent);
     document.body.appendChild(captureWrap);
 
-    const canvas = await html2canvas(captureWrap, {
-      scale: 1.5,
-      useCORS: true,
-      backgroundColor: '#ffffff',
-      width: 1200,
-      windowWidth: 1200,
-    });
-
+    const canvas = await html2canvas(captureWrap, { scale: 1.5, useCORS: true, backgroundColor: '#ffffff', width: 1200, windowWidth: 1200 });
     document.body.removeChild(captureWrap);
 
-    // 2. Convertir canvas a blob y descargar como imagen
+    // 2. Descargar imagen automáticamente
     canvas.toBlob(blob => {
       const imgUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -1351,40 +1566,33 @@ async function sendEmailReport() {
       a.download = `Informe_Hallazgos_${area.replace(/[^a-zA-Z0-9]/g,'_')}_${fecha}.png`.replace(/__+/g,'_');
       a.click();
       URL.revokeObjectURL(imgUrl);
+    }, 'image/png');
 
-      // 3. Construir el cuerpo del correo en texto plano
-      const insp  = document.getElementById('meta-inspector').value || '—';
-      const sup   = document.getElementById('meta-supervisor').value || '—';
-      const hora  = document.getElementById('meta-hora').value || '—';
-
-      let counts = { nc: 0, obs: 0, om: 0 };
-      let lineas = [];
-      let globalIdx = 1;
-      SECTIONS.forEach(section => {
-        let secLineas = [];
-        section.items.forEach(pregunta => {
-          const rowId = `row_${section.id}_${globalIdx}`;
-          const s = state[rowId];
-          if (s && (s.hallazgo === 'nc' || s.hallazgo === 'obs' || s.hallazgo === 'om')) {
-            counts[s.hallazgo]++;
-            const tipo = { nc:'NO CONFORME', obs:'OBSERVACIÓN', om:'OPORTUNIDAD DE MEJORA' }[s.hallazgo];
-            const sev  = s.severidad ? ` | Severidad: ${s.severidad}` : '';
-            const com  = s.comentario ? `\n   Comentario: ${s.comentario}` : '';
-            secLineas.push(`  ${String(globalIdx).padStart(2,'0')}. [${tipo}${sev}]\n   ${pregunta}${com}`);
-          }
-          globalIdx++;
-        });
-        if (secLineas.length) {
-          lineas.push(`\n── ${section.title.toUpperCase()} ──`);
-          lineas.push(...secLineas);
+    // 3. Construir cuerpo del correo
+    let counts = { nc:0, obs:0, om:0 };
+    let lineas = [];
+    let globalIdx = 1;
+    SECTIONS.forEach(section => {
+      let secLineas = [];
+      section.items.forEach(pregunta => {
+        const s = state[`row_${section.id}_${globalIdx}`];
+        if (s && (s.hallazgo === 'nc' || s.hallazgo === 'obs' || s.hallazgo === 'om')) {
+          counts[s.hallazgo]++;
+          const tipo = { nc:'NO CONFORME', obs:'OBSERVACIÓN', om:'OPORTUNIDAD DE MEJORA' }[s.hallazgo];
+          const sev  = s.severidad ? ` | Severidad: ${s.severidad}` : '';
+          const com  = s.comentario ? `\n   Comentario: ${s.comentario}` : '';
+          secLineas.push(`  ${String(globalIdx).padStart(2,'0')}. [${tipo}${sev}]\n   ${pregunta}${com}`);
         }
+        globalIdx++;
       });
+      if (secLineas.length) { lineas.push(`\n── ${section.title.toUpperCase()} ──`); lineas.push(...secLineas); }
+    });
 
-      const total = counts.nc + counts.obs + counts.om;
-      const cuerpo =
+    const total = counts.nc + counts.obs + counts.om;
+    const cuerpo =
 `Estimados,
 
-Se adjunta el informe de hallazgos correspondiente a la inspección interna realizada en:
+Se adjunta el informe de hallazgos de la inspección interna realizada en:
 
   Área:         ${area}
   Fecha:        ${fecha}
@@ -1392,35 +1600,31 @@ Se adjunta el informe de hallazgos correspondiente a la inspección interna real
   Inspeccionó:  ${insp}
   Supervisor:   ${sup}
 
-RESUMEN DE HALLAZGOS (${total} en total):
-  • No Conformes:          ${counts.nc}
-  • Observaciones:         ${counts.obs}
-  • Oportunidades de Mejora: ${counts.om}
+RESUMEN (${total} hallazgos):
+  • No Conformes:             ${counts.nc}
+  • Observaciones:            ${counts.obs}
+  • Oportunidades de Mejora:  ${counts.om}
 
 DETALLE:
 ${lineas.join('\n')}
 
 ─────────────────────────────────────────
-⚠️ La imagen del informe fue descargada automáticamente.
-   Por favor adjuntarla manualmente antes de enviar.
+⚠️ La imagen del informe se descargó automáticamente.
+   Por favor adjuntarla antes de enviar.
 ─────────────────────────────────────────
-
 Sistema R-SIG-II 02 — Maniagro Argentina
 rgutierrez@maniagro.com`;
 
-      const subject = encodeURIComponent(`⚠️ Informe de Hallazgos — ${area} | ${fecha}`);
-      const body    = encodeURIComponent(cuerpo);
-      const to      = currentRecipients.join(',');
+    // 4. Abrir Gmail compose
+    const to      = currentRecipients.join(',');
+    const subject = encodeURIComponent(`⚠️ Informe de Hallazgos — ${area} | ${fecha}`);
+    const body    = encodeURIComponent(cuerpo);
+    window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${subject}&body=${body}`, '_blank');
 
-      // 4. Abrir cliente de correo
-      window.location.href = `mailto:${to}?subject=${subject}&body=${body}`;
-
-      showSendStatus('success', '✅ Se descargó la imagen del informe y se abrió tu cliente de correo. Adjuntá la imagen antes de enviar.');
-    }, 'image/png');
-
+    showSendStatus('success', '✅ Imagen descargada y Gmail abierto. Adjuntá la imagen antes de enviar.');
   } catch (err) {
     console.error('Error generando informe:', err);
-    showSendStatus('error', `❌ Error al generar la captura: ${err.message}`);
+    showSendStatus('error', `❌ Error: ${err.message}`);
   } finally {
     btn.disabled = false;
   }
@@ -2034,6 +2238,9 @@ updateProgress();
 // Set today's date
 const today = new Date();
 document.getElementById('meta-fecha').value = today.toISOString().split('T')[0];
+
+// Init Drive client once Google SDK loads
+window.addEventListener('load', () => { setTimeout(initDriveClient, 1500); });
 </script>
 </body>
 </html>
