@@ -185,7 +185,7 @@
 
   .col-headers {
     display: grid;
-    grid-template-columns: 1fr 180px 90px 1fr 44px;
+    grid-template-columns: 1.3fr 48px 48px 48px 48px 90px 1.2fr 44px;
     gap: 0;
     background: #f0f4f8;
     border-bottom: 1px solid var(--gris-borde);
@@ -206,7 +206,7 @@
 
   .checklist-row {
     display: grid;
-    grid-template-columns: 1fr 180px 90px 1fr 44px;
+    grid-template-columns: 1.3fr 48px 48px 48px 48px 90px 1.2fr 44px;
     gap: 0;
     border-bottom: 1px solid #eef0f4;
     align-items: stretch;
@@ -630,14 +630,14 @@
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
       display: grid !important;
-      grid-template-columns: 1fr 180px 90px 1fr 44px !important;
+      grid-template-columns: 1.3fr 48px 48px 48px 48px 90px 1.2fr 44px !important;
     }
     .form-meta, .legend-bar { border: 1px solid #ccc; margin-bottom: 6px; padding: 10px 16px !important; }
     .notes-section, .firma-section { margin: 0 0 12px; }
     /* Forzar layout de tabla en todas las filas */
     .checklist-row {
       display: grid !important;
-      grid-template-columns: 1fr 180px 90px 1fr 44px !important;
+      grid-template-columns: 1.3fr 48px 48px 48px 48px 90px 1.2fr 44px !important;
       flex-direction: unset !important;
       padding: 0 !important;
       gap: 0 !important;
@@ -1326,6 +1326,7 @@
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 // ── PRINT TIP MODAL ───────────────────────────────────────────────────────────
 let printTipShown = false;
@@ -1542,30 +1543,49 @@ async function exportPDF() {
     }
     document.getElementById('ev-print-section').style.display = hasEvidence ? 'block' : 'none';
 
-    // Capture main form as canvas and convert to PDF-like PNG then upload
-    const captureTarget = document.getElementById('main-form');
+    // Capturar el cuerpo completo y convertirlo en PDF multipágina
+    setDriveStatus('uploading', 'Generando PDF...');
     const canvas = await html2canvas(document.body, {
-      scale: 1.5,
+      scale: 2,
       useCORS: true,
       backgroundColor: '#ffffff',
-      ignoreElements: el => el.classList.contains('actions-bar') || el.classList.contains('modal-overlay') || el.classList.contains('report-modal-overlay')
+      ignoreElements: el =>
+        el.classList.contains('actions-bar') ||
+        el.classList.contains('modal-overlay') ||
+        el.classList.contains('report-modal-overlay')
     });
 
-    const pdfName = `CheckList_${areaFolderName}_${fecha}.png`;
+    // Generar PDF A4 landscape con paginación
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const pdfWidth  = pdf.internal.pageSize.getWidth();   // 297mm
+    const pdfHeight = pdf.internal.pageSize.getHeight();  // 210mm
+    const imgProps  = { width: canvas.width, height: canvas.height };
+    const ratio     = pdfWidth / imgProps.width;
+    const imgHeightMm = imgProps.height * ratio;
+
+    const imgData = canvas.toDataURL('image/jpeg', 0.92);
+    let heightLeft = imgHeightMm;
+    let position = 0;
+    pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeightMm);
+    heightLeft -= pdfHeight;
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeightMm;
+      pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeightMm);
+      heightLeft -= pdfHeight;
+    }
+    const pdfBlob = pdf.output('blob');
+
+    const pdfName = `CheckList_${areaFolderName}_${fecha}.pdf`;
     setDriveStatus('uploading', 'Subiendo PDF a Drive...');
-
-    await new Promise(resolve => {
-      canvas.toBlob(async blob => {
-        await uploadFileToDrive(pdfName, blob, 'image/png', inspFolderId);
-        resolve();
-      }, 'image/png', 0.92);
-    });
+    await uploadFileToDrive(pdfName, pdfBlob, 'application/pdf', inspFolderId);
 
     const total = evUploads.length;
     setDriveStatus('done', `Guardado en Drive: 1 PDF + ${total} evidencia(s)`);
 
-    // También imprimir localmente
-    showPrintTip(() => window.print());
+    // Descargar también localmente
+    pdf.save(pdfName);
 
   } catch(err) {
     console.error('Drive upload error:', err);
@@ -1915,7 +1935,10 @@ function buildForm() {
     ch.className = 'col-headers';
     ch.innerHTML = `
       <div class="col-header">Criterio</div>
-      <div class="col-header">C &nbsp; NC &nbsp; OM &nbsp; OB</div>
+      <div class="col-header">C</div>
+      <div class="col-header">NC</div>
+      <div class="col-header">OM</div>
+      <div class="col-header">OB</div>
       <div class="col-header">Severidad</div>
       <div class="col-header">Comentarios</div>
       <div class="col-header">Evid.</div>
@@ -1937,21 +1960,30 @@ function buildForm() {
           <span class="num">${String(globalIdx).padStart(2,'0')}.</span>
           <span class="pregunta">${pregunta}</span>
         </div>
-        <!-- Tipo de hallazgo: 4 radios en una celda -->
-        <div class="cell radio-cell">
-          <label class="radio-inline" style="cursor:pointer;" title="Conforme">
+        <!-- Conforme -->
+        <div class="cell">
+          <label style="cursor:pointer;" title="Conforme">
             <input type="radio" name="hallazgo_${rowId}" value="conforme" onchange="setHallazgo('${rowId}','conforme',this)">
             <div class="radio-dot"></div>
           </label>
-          <label class="radio-inline" style="cursor:pointer;" title="No Conforme">
+        </div>
+        <!-- No Conforme -->
+        <div class="cell">
+          <label style="cursor:pointer;" title="No Conforme">
             <input type="radio" name="hallazgo_${rowId}" value="nc" onchange="setHallazgo('${rowId}','nc',this)">
             <div class="radio-dot"></div>
           </label>
-          <label class="radio-inline" style="cursor:pointer;" title="Oportunidad de Mejora">
+        </div>
+        <!-- Oportunidad de Mejora -->
+        <div class="cell">
+          <label style="cursor:pointer;" title="Oportunidad de Mejora">
             <input type="radio" name="hallazgo_${rowId}" value="om" onchange="setHallazgo('${rowId}','om',this)">
             <div class="radio-dot"></div>
           </label>
-          <label class="radio-inline" style="cursor:pointer;" title="Observación">
+        </div>
+        <!-- Observación -->
+        <div class="cell">
+          <label style="cursor:pointer;" title="Observación">
             <input type="radio" name="hallazgo_${rowId}" value="obs" onchange="setHallazgo('${rowId}','obs',this)">
             <div class="radio-dot"></div>
           </label>
