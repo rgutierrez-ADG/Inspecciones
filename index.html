@@ -607,19 +607,56 @@
 
   /* ── PDF PRINT ── */
   @media print {
-    @page { margin: 10mm; size: auto; }
-    body { background: white; font-size: 10px; }
+    @page {
+      margin: 10mm;
+      size: A4 landscape;
+    }
+    @page :first { margin-top: 0mm; }
+    body { background: white; font-size: 10px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .actions-bar { display: none !important; }
     .modal-overlay { display: none !important; }
     .evidence-btn { display: none !important; }
+    #mobile-ev-btns { display: none !important; }
     .header-logo { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .section-block { box-shadow: none; border: 1px solid #ccc; page-break-inside: avoid; }
     .main { padding: 0; }
-    .header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .header { -webkit-print-color-adjust: exact; print-color-adjust: exact; grid-template-columns: auto 1fr auto !important; }
+    .header-meta { display: flex !important; }
+    .header-logo img { height: 64px !important; }
+    .header-title { padding: 18px 28px !important; }
+    .header-title h1 { font-size: 16px !important; }
     .section-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .col-headers { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .form-meta, .legend-bar { border: 1px solid #ccc; margin-bottom: 6px; }
+    .col-headers {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      display: grid !important;
+      grid-template-columns: 1fr 56px 80px 96px 72px 72px 180px 48px !important;
+    }
+    .form-meta, .legend-bar { border: 1px solid #ccc; margin-bottom: 6px; padding: 10px 16px !important; }
     .notes-section, .firma-section { margin: 0 0 12px; }
+    /* Forzar layout de tabla en todas las filas */
+    .checklist-row {
+      display: grid !important;
+      grid-template-columns: 1fr 56px 80px 96px 72px 72px 180px 48px !important;
+      flex-direction: unset !important;
+      padding: 0 !important;
+      gap: 0 !important;
+    }
+    .checklist-row .cell {
+      border-right: 1px solid #eef0f4 !important;
+      padding: 6px 8px !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      width: auto !important;
+    }
+    .checklist-row .cell:first-child { justify-content: flex-start !important; padding: 6px 12px !important; }
+    .radio-group { flex-direction: column !important; }
+    .radio-opt { border: none !important; padding: 1px 2px !important; }
+    textarea.comentario { font-size: 9px !important; min-height: unset !important; }
+    select.sev-select { font-size: 9px !important; }
+    .pregunta { font-size: 10px !important; }
+    .firma-section { grid-template-columns: 1fr 1fr 1fr !important; }
 
     .ev-print-section {
       page-break-before: always;
@@ -1245,9 +1282,53 @@
 <!-- INFORME PRINT WRAPPER (solo visible al imprimir con clase en body) -->
 <div class="informe-print-wrap" id="informe-print-wrap"></div>
 
+<!-- MODAL TIP DE IMPRESIÓN -->
+<div class="modal-overlay" id="print-tip-overlay">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header" style="background:#1B5E99;">
+      <h3>🖨️ Antes de imprimir / guardar PDF</h3>
+      <button class="modal-close" onclick="confirmPrint()">✕</button>
+    </div>
+    <div class="modal-body" style="padding:20px;">
+      <p style="font-size:13px;margin-bottom:14px;line-height:1.6;">Para que el documento quede limpio <strong>desactivá los encabezados y pies de página</strong> en el diálogo de Chrome:</p>
+      <div style="background:#f0f4f8;border-radius:8px;padding:14px 16px;font-size:12px;line-height:1.9;border-left:4px solid #1B5E99;">
+        <div>1. En el diálogo de impresión → <strong>Más opciones</strong></div>
+        <div>2. Buscá <strong>"Encabezados y pies de página"</strong></div>
+        <div>3. <strong>Desactivalo</strong> ✓</div>
+      </div>
+      <div style="margin-top:12px;background:#f3fae8;border-radius:6px;padding:10px 14px;font-size:11px;color:#1B6B35;border:1px solid #c5e8a0;">
+        💡 Chrome recuerda esta preferencia para el sitio — solo tenés que hacerlo una vez.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="cancelPrint()">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmPrint()">Entendido, continuar →</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
+// ── PRINT TIP MODAL ───────────────────────────────────────────────────────────
+let printTipShown = false;
+let pendingPrintFn = null;
+
+function showPrintTip(fn) {
+  if (printTipShown) { fn(); return; }
+  pendingPrintFn = fn;
+  document.getElementById('print-tip-overlay').classList.add('open');
+}
+function confirmPrint() {
+  printTipShown = true;
+  document.getElementById('print-tip-overlay').classList.remove('open');
+  if (pendingPrintFn) { const fn = pendingPrintFn; pendingPrintFn = null; fn(); }
+}
+function cancelPrint() {
+  document.getElementById('print-tip-overlay').classList.remove('open');
+  pendingPrintFn = null;
+}
+
 // ── GOOGLE DRIVE CONFIG ───────────────────────────────────────────────────────
 // Authorized JS origin en Google Cloud Console: https://rgutierrez-adg.github.io
 const DRIVE_CLIENT_ID   = '528727050289-ee9ucte32ncqfaf23muvtis4tbn36spa.apps.googleusercontent.com';
@@ -1467,7 +1548,7 @@ async function exportPDF() {
     setDriveStatus('done', `Guardado en Drive: 1 PDF + ${total} evidencia(s)`);
 
     // También imprimir localmente
-    window.print();
+    showPrintTip(() => window.print());
 
   } catch(err) {
     console.error('Drive upload error:', err);
@@ -2090,7 +2171,7 @@ function exportPDF() {
   const evSection = document.getElementById('ev-print-section');
   evSection.style.display = hasEvidence ? 'block' : 'none';
 
-  window.print();
+  showPrintTip(() => window.print());
 }
 
 // ── INFORME DE HALLAZGOS ──────────────────────────────────────────────────────
@@ -2291,8 +2372,7 @@ function printReport() {
 
   wrap.innerHTML = html;
   document.body.classList.add('printing-report');
-  window.print();
-  document.body.classList.remove('printing-report');
+  showPrintTip(() => { window.print(); document.body.classList.remove('printing-report'); });
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
