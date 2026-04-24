@@ -185,7 +185,7 @@
 
   .col-headers {
     display: grid;
-    grid-template-columns: 1fr 52px 52px 52px 52px 80px 200px 46px;
+    grid-template-columns: 1fr 180px 90px 1fr 44px;
     gap: 0;
     background: #f0f4f8;
     border-bottom: 1px solid var(--gris-borde);
@@ -206,7 +206,7 @@
 
   .checklist-row {
     display: grid;
-    grid-template-columns: 1fr 52px 52px 52px 52px 80px 200px 46px;
+    grid-template-columns: 1fr 180px 90px 1fr 44px;
     gap: 0;
     border-bottom: 1px solid #eef0f4;
     align-items: stretch;
@@ -630,14 +630,14 @@
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
       display: grid !important;
-      grid-template-columns: 1fr 52px 52px 52px 52px 80px 200px 46px !important;
+      grid-template-columns: 1fr 180px 90px 1fr 44px !important;
     }
     .form-meta, .legend-bar { border: 1px solid #ccc; margin-bottom: 6px; padding: 10px 16px !important; }
     .notes-section, .firma-section { margin: 0 0 12px; }
     /* Forzar layout de tabla en todas las filas */
     .checklist-row {
       display: grid !important;
-      grid-template-columns: 1fr 52px 52px 52px 52px 80px 200px 46px !important;
+      grid-template-columns: 1fr 180px 90px 1fr 44px !important;
       flex-direction: unset !important;
       padding: 0 !important;
       gap: 0 !important;
@@ -695,6 +695,24 @@
       border-radius: 4px;
     }
   }
+
+  /* ── RADIO CELL (4 en una celda) ── */
+  .radio-cell {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center;
+    justify-content: space-around !important;
+    gap: 4px;
+    padding: 6px 4px !important;
+  }
+  .radio-inline {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex: 1;
+  }
+  .radio-inline input[type=radio] { display: none; }
 
   /* Highlight por selección */
   .checklist-row.selected-c { background: #f0faf3; }
@@ -1056,11 +1074,10 @@
       gap: 8px;
     }
     .checklist-row .cell { border: none !important; padding: 0 !important; width: 100%; justify-content: flex-start !important; }
+    .checklist-row .radio-cell { width: 100%; justify-content: space-around !important; padding: 8px 0 !important; border: 1px solid var(--gris-borde) !important; border-radius: 8px !important; }
     .pregunta { font-size: 13px; line-height: 1.5; }
-    /* Botones de tipo en fila */
-    .radio-group { flex-direction: row !important; flex-wrap: wrap; gap: 4px; }
-    .radio-opt { border: 1.5px solid var(--gris-borde); border-radius: 6px; padding: 5px 8px; }
-    .radio-opt .radio-label { font-size: 11px; font-weight: 600; }
+    /* Radio cell en móvil */
+    .radio-cell { flex-direction: row !important; justify-content: space-around !important; padding: 6px !important; }
     /* Textarea y select más grandes */
     textarea.comentario { min-height: 44px; font-size: 14px; }
     select.sev-select { font-size: 14px; padding: 6px; }
@@ -1898,10 +1915,7 @@ function buildForm() {
     ch.className = 'col-headers';
     ch.innerHTML = `
       <div class="col-header">Criterio</div>
-      <div class="col-header">C</div>
-      <div class="col-header">NC</div>
-      <div class="col-header">OM</div>
-      <div class="col-header">OB</div>
+      <div class="col-header">C &nbsp; NC &nbsp; OM &nbsp; OB</div>
       <div class="col-header">Severidad</div>
       <div class="col-header">Comentarios</div>
       <div class="col-header">Evid.</div>
@@ -1923,30 +1937,21 @@ function buildForm() {
           <span class="num">${String(globalIdx).padStart(2,'0')}.</span>
           <span class="pregunta">${pregunta}</span>
         </div>
-        <!-- Conforme -->
-        <div class="cell">
-          <label style="cursor:pointer;">
+        <!-- Tipo de hallazgo: 4 radios en una celda -->
+        <div class="cell radio-cell">
+          <label class="radio-inline" style="cursor:pointer;" title="Conforme">
             <input type="radio" name="hallazgo_${rowId}" value="conforme" onchange="setHallazgo('${rowId}','conforme',this)">
             <div class="radio-dot"></div>
           </label>
-        </div>
-        <!-- No Conforme -->
-        <div class="cell">
-          <label style="cursor:pointer;">
+          <label class="radio-inline" style="cursor:pointer;" title="No Conforme">
             <input type="radio" name="hallazgo_${rowId}" value="nc" onchange="setHallazgo('${rowId}','nc',this)">
             <div class="radio-dot"></div>
           </label>
-        </div>
-        <!-- Oportunidad de mejora -->
-        <div class="cell">
-          <label style="cursor:pointer;">
+          <label class="radio-inline" style="cursor:pointer;" title="Oportunidad de Mejora">
             <input type="radio" name="hallazgo_${rowId}" value="om" onchange="setHallazgo('${rowId}','om',this)">
             <div class="radio-dot"></div>
           </label>
-        </div>
-        <!-- Observación -->
-        <div class="cell">
-          <label style="cursor:pointer;">
+          <label class="radio-inline" style="cursor:pointer;" title="Observación">
             <input type="radio" name="hallazgo_${rowId}" value="obs" onchange="setHallazgo('${rowId}','obs',this)">
             <div class="radio-dot"></div>
           </label>
@@ -2134,59 +2139,6 @@ function resetForm() {
 
 
 
-function exportPDF() {
-  // Build evidence print section
-  const evPrint = document.getElementById('ev-print-content');
-  evPrint.innerHTML = '';
-  let hasEvidence = false;
-
-  SECTIONS.forEach(section => {
-    let idx = 1;
-    // recalculate globalIdx per section
-  });
-
-  // Iterate all state entries and build evidence section
-  let globalIdx = 1;
-  SECTIONS.forEach(section => {
-    section.items.forEach(pregunta => {
-      const rowId = `row_${section.id}_${globalIdx}`;
-      const rowState = state[rowId];
-      if (rowState && rowState.evidence && rowState.evidence.length > 0) {
-        hasEvidence = true;
-        const item = document.createElement('div');
-        item.className = 'ev-print-item';
-        const label = document.createElement('div');
-        label.className = 'ev-print-label';
-        label.textContent = `${String(globalIdx).padStart(2,'0')}. ${pregunta}`;
-        item.appendChild(label);
-        const imgGrid = document.createElement('div');
-        imgGrid.className = 'ev-print-images';
-        rowState.evidence.forEach(ev => {
-          if (ev.type && ev.type.startsWith('image/')) {
-            const img = document.createElement('img');
-            img.src = ev.dataUrl;
-            img.alt = ev.name;
-            imgGrid.appendChild(img);
-          } else {
-            const p = document.createElement('p');
-            p.style.fontSize = '11px';
-            p.style.color = '#555';
-            p.textContent = `📎 ${ev.name}`;
-            imgGrid.appendChild(p);
-          }
-        });
-        item.appendChild(imgGrid);
-        evPrint.appendChild(item);
-      }
-      globalIdx++;
-    });
-  });
-
-  const evSection = document.getElementById('ev-print-section');
-  evSection.style.display = hasEvidence ? 'block' : 'none';
-
-  showPrintTip(() => window.print());
-}
 
 // ── INFORME DE HALLAZGOS ──────────────────────────────────────────────────────
 const LOGO_B64 = document.querySelector('.header-logo img').src;
