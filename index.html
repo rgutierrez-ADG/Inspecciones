@@ -836,6 +836,33 @@
     margin-top: 3px;
     display: flex; align-items: center; gap: 4px;
   }
+  .ri-evidencia-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    margin-top: 6px;
+    max-width: 480px;
+  }
+  .ri-ev-img {
+    width: 100%;
+    aspect-ratio: 4/3;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    background: white;
+    cursor: pointer;
+    transition: transform .15s;
+  }
+  .ri-ev-img:hover { transform: scale(1.05); box-shadow: 0 4px 12px rgba(0,0,0,.2); }
+  .ri-ev-file {
+    padding: 6px 8px;
+    font-size: 10px;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    color: #666;
+    word-break: break-all;
+  }
   .badge-tipo {
     font-size: 9px;
     font-weight: 700;
@@ -1039,8 +1066,20 @@
     .ipi-sev.critica { background: #c0392b; color: white; border-color: #c0392b; }
     .ipi-sev.mayor { background: #e67e22; color: white; border-color: #e67e22; }
     .ipi-sev.menor { background: #3498db; color: white; border-color: #3498db; }
-    .informe-print-ev { margin-top: 4px; }
-    .informe-print-ev img { max-width: 160px; max-height: 120px; border: 1px solid #ccc; border-radius: 3px; margin: 2px; }
+    .informe-print-ev {
+      margin-top: 4px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4px;
+      max-width: 400px;
+    }
+    .informe-print-ev img {
+      width: 100%;
+      aspect-ratio: 4/3;
+      object-fit: cover;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+    }
     .informe-print-totals {
       margin-top: 16px;
       padding: 8px 12px;
@@ -2249,8 +2288,18 @@ function openReport() {
         const badgeClass = { nc:'badge-nc', obs:'badge-obs', om:'badge-om' };
         const sevClass = s.severidad ? `sev-${s.severidad.toLowerCase()}` : '';
 
-        const evCount = s.evidence && s.evidence.length > 0
-          ? `<div class="ri-evidencia">📎 ${s.evidence.length} evidencia${s.evidence.length > 1 ? 's' : ''} adjunta${s.evidence.length > 1 ? 's' : ''}</div>` : '';
+        let evHtml = '';
+        if (s.evidence && s.evidence.length > 0) {
+          evHtml = `<div class="ri-evidencia-grid">`;
+          s.evidence.forEach(ev => {
+            if (ev.type && ev.type.startsWith('image/')) {
+              evHtml += `<img src="${ev.dataUrl}" alt="${ev.name}" class="ri-ev-img">`;
+            } else {
+              evHtml += `<div class="ri-ev-file">📎 ${ev.name}</div>`;
+            }
+          });
+          evHtml += `</div>`;
+        }
         const comentHtml = s.comentario
           ? `<div class="ri-comentario">💬 ${s.comentario}</div>` : '';
 
@@ -2261,7 +2310,7 @@ function openReport() {
           <div class="report-item-num">${String(num).padStart(2,'0')}</div>
           <div class="report-item-text">
             <div class="ri-pregunta">${pregunta}</div>
-            ${comentHtml}${evCount}
+            ${comentHtml}${evHtml}
           </div>
           <span class="badge-tipo ${badgeClass[s.hallazgo]}">${typeMap[s.hallazgo]}</span>
           ${s.severidad ? `<span class="badge-sev ${sevClass}">${s.severidad}</span>` : '<span></span>'}
