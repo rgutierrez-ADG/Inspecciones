@@ -711,7 +711,6 @@
     word-break: break-all;
   }
 
-
   /* ── RADIO CELL (4 en una celda) ── */
   .radio-cell {
     display: flex !important;
@@ -1979,6 +1978,7 @@ document.getElementById('meta-area').addEventListener('change', async function()
     return;
   }
 
+  // 1. Buscamos el ID del archivo según el área seleccionada
   const sheetId = MAPA_HOJAS_POR_AREA[area];
   if (!sheetId) {
     alert('Aún no hay un Google Sheet configurado en el código para el área: ' + area);
@@ -1987,22 +1987,25 @@ document.getElementById('meta-area').addEventListener('change', async function()
   }
 
   try {
-    setDriveStatus('uploading', 'Conectando con Google Sheets para cargar preguntas...');
+    setDriveStatus('uploading', 'Conectando con el archivo del área...');
     
     const token = await driveAuth();
     if (!token) return;
 
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Referencia!A2:C200`;
+    // 2. Leemos la pestaña "Check List". Según la imagen, las preguntas empiezan en la fila 8.
+    // Leemos las columnas A (Sección) y B (Criterios)
+    const sheetName = encodeURIComponent('Check List');
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetName}!A8:B200`;
     const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
 
     if (!res.ok) {
-      throw new Error('No se pudo leer la hoja. Revisá que la pestaña se llame exactamente "Referencia".');
+      throw new Error('No se pudo leer la hoja. Revisá permisos o el nombre de la pestaña.');
     }
     
     const data = await res.json();
 
     if (!data.values || data.values.length === 0) {
-      alert('La pestaña "Referencia" está vacía en este Google Sheet.');
+      alert('La pestaña "Check List" está vacía en este archivo.');
       limpiarVariablesEstado();
       return;
     }
@@ -2010,35 +2013,50 @@ document.getElementById('meta-area').addEventListener('change', async function()
     const nuevasSecciones = [];
     let idSeccionActual = '';
     let objSeccionActual = null;
+    let ultimaSeccionVista = 'General'; // Variable para recordar celdas combinadas
 
+    // 3. Procesamos las filas
     data.values.forEach(row => {
-      const rowArea = row[0] ? row[0].trim() : '';
-      const rowSeccion = row[1] ? row[1].trim() : '';
-      const rowPregunta = row[2] ? row[2].trim() : '';
+      // Columna A (índice 0) = Sección
+      // Columna B (índice 1) = Pregunta / Criterio
+      let rowSeccion = row[0] ? row[0].trim() : '';
+      const rowPregunta = row[1] ? row[1].trim() : '';
 
-      if (rowArea === area && rowSeccion && rowPregunta) {
+      // MANEJO DE CELDAS COMBINADAS:
+      // Si la Columna A tiene texto, actualizamos la memoria. Si viene vacía, usamos lo que recordamos.
+      if (rowSeccion) {
+        ultimaSeccionVista = rowSeccion;
+      } else {
+        rowSeccion = ultimaSeccionVista;
+      }
+
+      // Si hay una pregunta en la Columna B, la agregamos al formulario
+      if (rowPregunta) {
         const secId = rowSeccion.toLowerCase().replace(/[^a-z0-9]/g, '');
 
+        // Si cambiamos de sección, creamos un bloque nuevo
         if (idSeccionActual !== secId) {
           objSeccionActual = { id: secId, title: rowSeccion, items: [] };
           nuevasSecciones.push(objSeccionActual);
           idSeccionActual = secId;
         }
+        // Agregamos la pregunta
         objSeccionActual.items.push(rowPregunta);
       }
     });
 
     if (nuevasSecciones.length === 0) {
-      alert('No se encontraron preguntas para esta área. Revisá que el nombre del Área en la Columna A sea exactamente igual al desplegable.');
+      alert('No se encontraron preguntas. Verificá la estructura del archivo.');
       limpiarVariablesEstado();
       return;
     }
 
+    // 4. Dibujamos el formulario en la pantalla
     SECTIONS = nuevasSecciones;
     limpiarVariablesEstado(); 
     buildForm();
     updateProgress();
-    setDriveStatus('done', 'Preguntas cargadas exitosamente');
+    setDriveStatus('done', 'Check List cargado exitosamente');
 
   } catch (err) {
     console.error(err);
@@ -2242,7 +2260,7 @@ function resetForm() {
   document.getElementById('meta-area').value = '';
   document.getElementById('meta-inspector').value = '';
   
-  // Borramos el formulario de la vista (para que se vuelva a cargar al elegir Área)
+  // Borramos el formulario de la vista
   limpiarVariablesEstado();
 }
 
