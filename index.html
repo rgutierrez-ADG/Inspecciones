@@ -1752,7 +1752,7 @@ const AREA_EMAILS = {
   'Producción producto elaborado Planta 1': [
     'produccionpe@maniagro.com',
     'dmartina@maniagro.com',
-    'smignola@croppers.com.ar',
+    'smignola@croppers.com',
     'mbozzo@maniagro.com'
   ],
   'Producción HPS 1 - Depósito pulmón HPS 1': [
@@ -1767,12 +1767,12 @@ const AREA_EMAILS = {
   ],
   'Producción maní blancheado': [
     'sup.maniblancheado@maniagro.com',
-    'gpratto@maniagro.com',
+    'gprattomaniagro.com',
     'mquiroga@maniagro.com'
   ],
   'Producción planta alérgenos': [
     'supervisorpecontacc@maniagro.com',
-    'smignola@croppers.com.ar',
+    'smignola@croppers.com',
     'mbozzo@maniagro.com'
   ],
   'Depósitos: D1 - D2 - D3, Pre-carga y carga de contenedores': [
@@ -1794,9 +1794,7 @@ const AREA_EMAILS = {
   'Descarga, Secado y Celdas': [],
   'Depósito Agroquímicos': [],
   'Planta Enfardadora': [],
-  'Laboratorio, Calador y Balanza':[
-    vpiussi@maniagro.com
-  ],
+  'Laboratorio, Calador y Balanza': []
 };
 
 let currentRecipients = [];
@@ -2257,7 +2255,7 @@ document.getElementById('file-input').addEventListener('change', function() { ha
 document.getElementById('file-cam').addEventListener('change', function() { handleFiles(this.files); this.value = ''; });
 const dz = document.getElementById('drop-zone');
 dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
-dz.addEventListener('dragleave', () => dz.classList.remove('dragover'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
 dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
 
 function handleFiles(files) {
