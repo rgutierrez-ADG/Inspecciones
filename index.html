@@ -1215,7 +1215,7 @@
 </div>
 
 <div class="main" id="main-form">
-</div>
+  </div>
 
 <div class="notes-section">
   <h3>Notas</h3>
@@ -1254,7 +1254,7 @@
 
 <div class="actions-bar">
   <div class="progress-info">
-    <span id="progress-text">0 / 38 respondidos</span>
+    <span id="progress-text">0 / 0 respondidos</span>
     <div class="progress-bar-wrap">
       <div class="progress-bar-fill" id="progress-fill" style="width:0%"></div>
     </div>
@@ -1389,12 +1389,25 @@ function cancelPrint() {
 }
 
 // ── GOOGLE DRIVE CONFIG ───────────────────────────────────────────────────────
-// Authorized JS origin en Google Cloud Console: https://rgutierrez-adg.github.io
 const DRIVE_CLIENT_ID   = '528727050289-ee9ucte32ncqfaf23muvtis4tbn36spa.apps.googleusercontent.com';
 const DRIVE_SCOPE       = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets';
 const DRIVE_ROOT_FOLDER = '1KZvafrxwLqdLQ6FXXSF9kS7FSo0CHT4S';
 const MASTER_SHEET_ID   = '1wynCMBnheTOQLZ8uwrZqQQ3vXDUKx-TsXO5wto0xigA';
-const MASTER_SHEET_NAME = 'Hoja 1'; // nombre de la pestaña donde se escribe
+const MASTER_SHEET_NAME = 'Hoja 1'; 
+
+// ── MAPA DE GOOGLE SHEETS POR ÁREA ────────────────────────────────────────────
+// Completar los que faltan con el ID correspondiente a cada planilla
+const MAPA_HOJAS_POR_AREA = {
+  'Planta Producto Elaborado': '1BJo1GXAxhFaBauJ65GDYOWy1sP0oMt9j-w0to2fU9zs',
+  'Planta HPS1 - Dep. Pulmón HPS1': '1-d-cYAncuVo3SfkfUQC-RzsSZfHmXm6bTspArkN6h4A',
+  'Planta HPS2': '1HsGlO3W2ZK71JCnDOKeHGLK1deYLlrD7nMsSnmKHwUg',
+  'Planta Blancheado': '1VwkHynACyAZnBAbNrp4rlJXznDLgaPjIZm8uo9njc7s',
+  'Planta Alérgenos': '', // <--- COMPLETAR CON EL ID CORRESPONDIENTE
+  'Depósitos D1 - D2 - D3 - Carga y Pre Carga': '', // <--- COMPLETAR
+  'Taller de Mantenimiento - Vehículos': '', // <--- COMPLETAR
+  'Pañol': '', // <--- COMPLETAR
+  'Insumos': '' // <--- COMPLETAR
+};
 
 let driveAccessToken = null;
 let driveTokenClient = null;
@@ -1453,7 +1466,6 @@ async function driveRequest(url, method, body, contentType) {
 }
 
 async function getOrCreateFolder(name, parentId) {
-  // Search for existing folder
   const q = encodeURIComponent(`name='${name}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`);
   const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`, {
     headers: { 'Authorization': `Bearer ${driveAccessToken}` }
@@ -1461,7 +1473,6 @@ async function getOrCreateFolder(name, parentId) {
   const data = await res.json();
   if (data.files && data.files.length > 0) return data.files[0].id;
 
-  // Create if not exists
   const created = await driveRequest(
     'https://www.googleapis.com/drive/v3/files',
     'POST',
@@ -1487,12 +1498,11 @@ async function uploadFileToDrive(fileName, blob, mimeType, parentFolderId) {
 
 // ── LISTA MAESTRA (GOOGLE SHEETS) ─────────────────────────────────────────────
 async function ensureMasterSheetHeaders() {
-  // Lee la primera fila; si está vacía, escribe encabezados
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${MASTER_SHEET_ID}/values/${encodeURIComponent(MASTER_SHEET_NAME)}!A1:M1`;
   const res = await fetch(url, { headers: { 'Authorization': `Bearer ${driveAccessToken}` } });
   if (!res.ok) throw new Error(`Sheets API error ${res.status}: ${await res.text()}`);
   const data = await res.json();
-  if (data.values && data.values.length > 0) return; // ya tiene encabezados
+  if (data.values && data.values.length > 0) return;
 
   const headers = [[
     'ID Hallazgo', 'Fecha Inspección', 'Hora', 'Área', 'Inspeccionó', 'Supervisor',
@@ -1504,7 +1514,6 @@ async function ensureMasterSheetHeaders() {
     body: JSON.stringify({ values: headers })
   });
 
-  // Formato: encabezado en azul con texto blanco
   await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${MASTER_SHEET_ID}:batchUpdate`, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${driveAccessToken}`, 'Content-Type': 'application/json' },
@@ -1546,15 +1555,14 @@ async function appendHallazgosToMasterSheet(rows) {
 
 // ── EXPORT PDF + DRIVE ────────────────────────────────────────────────────────
 async function exportPDF() {
-  // Asegurar token de Drive
   let token;
-  try {
-    token = await driveAuth();
-  } catch(e) {
-    alert('No se pudo conectar con Google Drive. Verificá tu conexión.');
+  try { token = await driveAuth(); } catch(e) { alert('No se pudo conectar con Google Drive. Verificá tu conexión.'); return; }
+  if (!token) return;
+
+  if (totalRows === 0) {
+    alert('No hay un formulario activo. Por favor, selecciona un Área primero.');
     return;
   }
-  if (!token) return;
 
   const area  = document.getElementById('meta-area').value  || 'Sin_Area';
   const fecha = document.getElementById('meta-fecha').value || new Date().toISOString().split('T')[0];
@@ -1565,15 +1573,12 @@ async function exportPDF() {
   setDriveStatus('uploading', 'Preparando carpetas...');
 
   try {
-    // 1. Carpeta del área (subcarpeta de la raíz)
     const areaFolderName = area.replace(/[/\\:*?"<>|]/g, '-');
     const areaFolderId = await getOrCreateFolder(areaFolderName, DRIVE_ROOT_FOLDER);
 
-    // 2. Carpeta de la inspección (fecha + inspector)
     const inspFolderName = `${fecha}_${hora.replace(':','-')}_${insp}`.replace(/[/\\:*?"<>|]/g,'-').replace(/\s+/g,'_');
     const inspFolderId = await getOrCreateFolder(inspFolderName, areaFolderId);
 
-    // 3. Subir evidencias individuales por punto
     let evIdx = 1;
     let globalIdx = 1;
     const evUploads = [];
@@ -1584,7 +1589,6 @@ async function exportPDF() {
         const rowId = `row_${section.id}_${globalIdx}`;
         const s = state[rowId];
         if (s && s.evidence && s.evidence.length > 0) {
-          // Subcarpeta por punto: "01 - Pregunta..."
           const ptName = `Punto_${String(globalIdx).padStart(2,'0')}`;
           const ptFolderId = await getOrCreateFolder(ptName, inspFolderId);
 
@@ -1592,7 +1596,6 @@ async function exportPDF() {
             const ev = s.evidence[i];
             const ext = ev.name.split('.').pop() || 'bin';
             const evName = `${String(globalIdx).padStart(2,'0')}_ev${i+1}.${ext}`;
-            // Convert dataUrl to blob
             const res = await fetch(ev.dataUrl);
             const blob = await res.blob();
             const uploaded = await uploadFileToDrive(evName, blob, ev.type, ptFolderId);
@@ -1604,10 +1607,8 @@ async function exportPDF() {
       }
     }
 
-    // 4. Generar y subir el PDF (usando print-to-blob via html2canvas)
     setDriveStatus('uploading', 'Generando PDF...');
 
-    // Preparar sección de evidencias para imprimir
     const evPrint = document.getElementById('ev-print-content');
     evPrint.innerHTML = '';
     let hasEvidence = false;
@@ -1646,16 +1647,13 @@ async function exportPDF() {
     }
     document.getElementById('ev-print-section').style.display = hasEvidence ? 'block' : 'none';
 
-    // Esperar a que todas las imágenes de evidencia carguen antes de capturar
     const evImgs = document.querySelectorAll('#ev-print-content img');
     await Promise.all(Array.from(evImgs).map(img =>
       img.complete ? Promise.resolve() :
       new Promise(res => { img.onload = res; img.onerror = res; })
     ));
-    // Pequeño delay extra para que aspect-ratio se asiente
     await new Promise(r => setTimeout(r, 200));
 
-    // Capturar el cuerpo completo y convertirlo en PDF multipágina
     setDriveStatus('uploading', 'Generando PDF...');
     const canvas = await html2canvas(document.body, {
       scale: 2,
@@ -1667,11 +1665,10 @@ async function exportPDF() {
         el.classList.contains('report-modal-overlay')
     });
 
-    // Generar PDF A4 landscape con paginación
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-    const pdfWidth  = pdf.internal.pageSize.getWidth();   // 297mm
-    const pdfHeight = pdf.internal.pageSize.getHeight();  // 210mm
+    const pdfWidth  = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
     const imgProps  = { width: canvas.width, height: canvas.height };
     const ratio     = pdfWidth / imgProps.width;
     const imgHeightMm = imgProps.height * ratio;
@@ -1693,7 +1690,6 @@ async function exportPDF() {
     setDriveStatus('uploading', 'Subiendo PDF a Drive...');
     const uploadedPdf = await uploadFileToDrive(pdfName, pdfBlob, 'application/pdf', inspFolderId);
 
-    // Registrar hallazgos en la Lista Maestra
     setDriveStatus('uploading', 'Registrando en Lista Maestra...');
     try {
       await ensureMasterSheetHeaders();
@@ -1737,7 +1733,6 @@ async function exportPDF() {
       setDriveStatus('done', `⚠️ Drive OK (${total} evid.) pero falló Lista Maestra: ${sheetErr.message}`);
     }
 
-    // Descargar también localmente
     pdf.save(pdfName);
 
   } catch(err) {
@@ -1792,7 +1787,6 @@ const AREA_EMAILS = {
   ]
 };
 
-// Estado de destinatarios en el modal
 let currentRecipients = [];
 
 function loadEmailsForArea(area) {
@@ -1862,7 +1856,6 @@ async function sendEmailReport() {
   const fecha = document.getElementById('meta-fecha').value || '—';
 
   try {
-    // 1. Capturar el modal del informe como imagen a 1200px
     const reportBody = document.getElementById('report-content');
     const metaBar    = document.getElementById('report-meta-bar');
 
@@ -1870,7 +1863,7 @@ async function sendEmailReport() {
     captureWrap.style.cssText = `position:fixed;left:-9999px;top:0;width:1200px;background:white;padding:24px;font-family:'IBM Plex Sans',Arial,sans-serif;`;
     captureWrap.innerHTML = `
       <div style="display:flex;align-items:center;gap:16px;margin-bottom:14px;padding-bottom:12px;border-bottom:3px solid #1B5E99;">
-        <img src="${LOGO_B64}" style="height:60px;" alt="Maniagro">
+        <img src="${document.querySelector('.header-logo img').src}" style="height:60px;" alt="Maniagro">
         <div>
           <div style="font-size:16px;font-weight:700;color:#1B5E99;">⚠️ Informe de Hallazgos — Inspección Interna</div>
           <div style="font-size:11px;color:#888;margin-top:3px;">R-SIG-II 02 | Maniagro Argentina | ${new Date().toLocaleString('es-AR')}</div>
@@ -1889,10 +1882,8 @@ async function sendEmailReport() {
 
     showSendStatus('sending', '⏳ Copiando imagen y generando PDF...');
 
-    // Convertir canvas a blob una sola vez y reutilizar
     const imgBlob = await new Promise(res => canvas.toBlob(res, 'image/png'));
 
-    // 2. Copiar imagen al portapapeles (Ctrl+V en Gmail)
     let clipboardOk = false;
     try {
       await navigator.clipboard.write([
@@ -1903,8 +1894,6 @@ async function sendEmailReport() {
       console.warn('Clipboard API no disponible:', e);
     }
 
-    // 3. Generar PDF del informe y descargarlo
-    // Preparar sección de evidencias
     const evPrint = document.getElementById('ev-print-content');
     evPrint.innerHTML = '';
     let hasEvidence = false;
@@ -1944,11 +1933,9 @@ async function sendEmailReport() {
     });
     document.getElementById('ev-print-section').style.display = hasEvidence ? 'block' : 'none';
 
-    // Imprimir/guardar PDF del informe completo
     showPrintTip(() => {
       window.print();
 
-      // 4. Abrir gestor de correo nativo con asunto y destinatarios
       const to      = currentRecipients.join(',');
       const subject = encodeURIComponent(`⚠️ Informe de Hallazgos — ${area} | ${fecha}`);
       const bodyTxt = encodeURIComponent(
@@ -1958,7 +1945,6 @@ async function sendEmailReport() {
       );
       
       setTimeout(() => {
-        // Usamos mailto: en lugar de la URL web de Gmail para compatibilidad móvil
         window.location.href = `mailto:${to}?subject=${subject}&body=${bodyTxt}`;
         
         showSendStatus('success',
@@ -1976,102 +1962,101 @@ async function sendEmailReport() {
     btn.disabled = false;
   }
 }
-const SECTIONS = [
-  {
-    id: 'orden',
-    title: 'Orden General',
-    items: [
-      '¿Existen materiales, equipos o partes de equipos que no correspondan al área?',
-      '¿Existen materiales que impidan o dificulten el acceso a equipos, oficinas o la libre circulación de personas o vehículos?',
-      '¿Hay herramientas fuera de lugar?',
-      '¿Las puertas y portones se mantienen cerrados?',
-      '¿Los cestos y contenedores de residuos están identificados?',
-      '¿Existe separación de residuos en el área? ¿Se respeta?',
-    ]
-  },
-  {
-    id: 'limpieza',
-    title: 'Limpieza',
-    items: [
-      '¿El piso, techo, paredes se encuentran limpios?',
-      '¿Se observa suciedad en los equipos?',
-      '¿Se observan residuos fuera de contenedores?',
-      '¿Hay herramientas fuera de lugar?',
-      '¿Están los productos de limpieza rotulados y almacenados en un gabinete bajo llave, lejos de la línea de producción?',
-      '¿Las puertas y portones se mantienen cerradas?',
-      '¿Existen Kits de contención de derrames? ¿Tiene todos los elementos necesarios?',
-      '¿Las herramientas de limpieza (escobas, paños) están codificadas por colores según el área?',
-      '¿El perímetro exterior de la planta está libre de maleza, escombros o charcos que atraigan fauna nociva?',
-      '¿Se observan derrames?',
-      '¿Se dispone de tejido mosquitero en ventanas de zonas productivas y depósitos?',
-    ]
-  },
-  {
-    id: 'mantenimiento',
-    title: 'Mantenimiento',
-    items: [
-      '¿Las reparaciones provisorias están documentadas y gestionadas?',
-      '¿Se detecta la presencia de productos químicos usados por mantenimiento? ¿Están rotulados y bajo supervisión?',
-      '¿Se detecta la presencia de cables o materiales eléctricos sueltos?',
-    ]
-  },
-  {
-    id: 'plagas',
-    title: 'Gestión de Plagas',
-    items: [
-      '¿Se dispone de barreras físicas en ventanas para evitar el ingreso de plagas en el área?',
-      '¿Se observa actividad de plagas en el área?',
-      '¿Se observan irregularidades estructurales que puedan permitir el ingreso de plagas en el área?',
-    ]
-  },
-  {
-    id: 'personal',
-    title: 'Comportamiento Personal',
-    items: [
-      '¿El personal utiliza los elementos de BPM correspondientes al sector?',
-      '¿El personal utiliza los EPP correspondientes para el sector y actividad que está realizando?',
-      '¿El personal utiliza joyas, accesorios, perfumes fuertes dentro de las instalaciones productivas?',
-      '¿El personal utiliza barbijo/barbero en los sectores en los que aplica?',
-      '¿Se observa correcto lavado de manos?',
-      '¿Se respeta la prohibición de comer o fumar en áreas productivas?',
-      '¿El personal lava sus manos antes de ingresar a las Plantas productivas?',
-    ]
-  },
-  {
-    id: 'maquinaria',
-    title: 'Estado de la Maquinaria',
-    items: [
-      '¿Las maquinarias están libres de partes oxidadas?',
-      '¿Las maquinarias tienen la pintura íntegra, sin descascarado?',
-      '¿Las maquinarias tienen las soldaduras en buenas condiciones?',
-    ]
-  },
-  {
-    id: 'insumos',
-    title: 'Insumos y Envases',
-    items: [
-      '¿Los insumos necesarios para los procesos del área están identificados y separados del producto terminado?',
-      '¿Los insumos están en su empaque y protegidos del ambiente?',
-    ]
-  },
-  {
-    id: 'noconformes',
-    title: 'Productos/Insumos No Conformes y Vencidos',
-    items: [
-      '¿Existe Producto Elaborado o Semielaborado No Conforme en el área? ¿Se encuentra separado e identificado?',
-      '¿Existen envases o insumos no conformes en el área? ¿Se encuentran separados e identificados?',
-      '¿Existen Productos, insumos o envases vencidos en el área? ¿Se encuentran separados e identificados?',
-    ]
-  }
-];
 
-// State
-const state = {}; // { rowId: { hallazgo, severidad, comentario, evidence: [] } }
+// ── GLOBAL STATE PARA GENERACIÓN DINÁMICA ──────────────────────────────────────
+let SECTIONS = []; 
+const state = {}; 
 let currentEvidenceRowId = null;
 let tempEvidence = [];
 let totalRows = 0;
 
-// ── RENDER ────────────────────────────────────────────────────────────────────
+// ── CARGA DINÁMICA DESDE GOOGLE SHEETS ────────────────────────────────────────
+document.getElementById('meta-area').addEventListener('change', async function() {
+  const area = this.value;
+  
+  if (!area) {
+    limpiarVariablesEstado();
+    return;
+  }
+
+  const sheetId = MAPA_HOJAS_POR_AREA[area];
+  if (!sheetId) {
+    alert('Aún no hay un Google Sheet configurado en el código para el área: ' + area);
+    limpiarVariablesEstado();
+    return;
+  }
+
+  try {
+    setDriveStatus('uploading', 'Conectando con Google Sheets para cargar preguntas...');
+    
+    const token = await driveAuth();
+    if (!token) return;
+
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Referencia!A2:C200`;
+    const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+
+    if (!res.ok) {
+      throw new Error('No se pudo leer la hoja. Revisá que la pestaña se llame exactamente "Referencia".');
+    }
+    
+    const data = await res.json();
+
+    if (!data.values || data.values.length === 0) {
+      alert('La pestaña "Referencia" está vacía en este Google Sheet.');
+      limpiarVariablesEstado();
+      return;
+    }
+
+    const nuevasSecciones = [];
+    let idSeccionActual = '';
+    let objSeccionActual = null;
+
+    data.values.forEach(row => {
+      const rowArea = row[0] ? row[0].trim() : '';
+      const rowSeccion = row[1] ? row[1].trim() : '';
+      const rowPregunta = row[2] ? row[2].trim() : '';
+
+      if (rowArea === area && rowSeccion && rowPregunta) {
+        const secId = rowSeccion.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+        if (idSeccionActual !== secId) {
+          objSeccionActual = { id: secId, title: rowSeccion, items: [] };
+          nuevasSecciones.push(objSeccionActual);
+          idSeccionActual = secId;
+        }
+        objSeccionActual.items.push(rowPregunta);
+      }
+    });
+
+    if (nuevasSecciones.length === 0) {
+      alert('No se encontraron preguntas para esta área. Revisá que el nombre del Área en la Columna A sea exactamente igual al desplegable.');
+      limpiarVariablesEstado();
+      return;
+    }
+
+    SECTIONS = nuevasSecciones;
+    limpiarVariablesEstado(); 
+    buildForm();
+    updateProgress();
+    setDriveStatus('done', 'Preguntas cargadas exitosamente');
+
+  } catch (err) {
+    console.error(err);
+    setDriveStatus('error', err.message);
+  }
+});
+
+function limpiarVariablesEstado() {
+  for (const prop of Object.getOwnPropertyNames(state)) {
+    delete state[prop];
+  }
+  totalRows = 0;
+  document.getElementById('main-form').innerHTML = '';
+  document.getElementById('progress-text').textContent = '0 / 0 respondidos';
+  document.getElementById('progress-fill').style.width = '0%';
+}
+
+// ── RENDER DEL FORMULARIO ─────────────────────────────────────────────────────
 function buildForm() {
   const main = document.getElementById('main-form');
   let globalIdx = 1;
@@ -2080,13 +2065,11 @@ function buildForm() {
     const block = document.createElement('div');
     block.className = 'section-block';
 
-    // Header
     const sh = document.createElement('div');
     sh.className = 'section-header';
     sh.textContent = section.title;
     block.appendChild(sh);
 
-    // Col headers
     const ch = document.createElement('div');
     ch.className = 'col-headers';
     ch.innerHTML = `
@@ -2115,50 +2098,15 @@ function buildForm() {
           <span class="num">${String(globalIdx).padStart(2,'0')}.</span>
           <span class="pregunta">${pregunta}</span>
         </div>
-        <div class="cell">
-          <label style="cursor:pointer;" title="Conforme">
-            <input type="radio" name="hallazgo_${rowId}" value="conforme" onchange="setHallazgo('${rowId}','conforme',this)">
-            <div class="radio-dot"></div>
-          </label>
-        </div>
-        <div class="cell">
-          <label style="cursor:pointer;" title="No Conforme">
-            <input type="radio" name="hallazgo_${rowId}" value="nc" onchange="setHallazgo('${rowId}','nc',this)">
-            <div class="radio-dot"></div>
-          </label>
-        </div>
-        <div class="cell">
-          <label style="cursor:pointer;" title="Oportunidad de Mejora">
-            <input type="radio" name="hallazgo_${rowId}" value="om" onchange="setHallazgo('${rowId}','om',this)">
-            <div class="radio-dot"></div>
-          </label>
-        </div>
-        <div class="cell">
-          <label style="cursor:pointer;" title="Observación">
-            <input type="radio" name="hallazgo_${rowId}" value="obs" onchange="setHallazgo('${rowId}','obs',this)">
-            <div class="radio-dot"></div>
-          </label>
-        </div>
-        <div class="cell">
-          <select class="sev-select" id="sev_${rowId}" onchange="state['${rowId}'].severidad=this.value">
-            <option value="">—</option>
-            <option value="Menor">Menor</option>
-            <option value="Mayor">Mayor</option>
-            <option value="Crítica">Crítica</option>
-          </select>
-        </div>
-        <div class="cell">
-          <textarea class="comentario" id="com_${rowId}" placeholder="Comentario..." rows="2" oninput="state['${rowId}'].comentario=this.value"></textarea>
-        </div>
-        <div class="cell">
-          <button class="evidence-btn" id="evbtn_${rowId}" onclick="openEvidence('${rowId}')" title="Adjuntar evidencia">
-            📎
-            <span class="evidence-badge" id="evcount_${rowId}">0</span>
-          </button>
-        </div>
+        <div class="cell"><label style="cursor:pointer;" title="Conforme"><input type="radio" name="hallazgo_${rowId}" value="conforme" onchange="setHallazgo('${rowId}','conforme',this)"><div class="radio-dot"></div></label></div>
+        <div class="cell"><label style="cursor:pointer;" title="No Conforme"><input type="radio" name="hallazgo_${rowId}" value="nc" onchange="setHallazgo('${rowId}','nc',this)"><div class="radio-dot"></div></label></div>
+        <div class="cell"><label style="cursor:pointer;" title="Oportunidad de Mejora"><input type="radio" name="hallazgo_${rowId}" value="om" onchange="setHallazgo('${rowId}','om',this)"><div class="radio-dot"></div></label></div>
+        <div class="cell"><label style="cursor:pointer;" title="Observación"><input type="radio" name="hallazgo_${rowId}" value="obs" onchange="setHallazgo('${rowId}','obs',this)"><div class="radio-dot"></div></label></div>
+        <div class="cell"><select class="sev-select" id="sev_${rowId}" onchange="state['${rowId}'].severidad=this.value"><option value="">—</option><option value="Menor">Menor</option><option value="Mayor">Mayor</option><option value="Crítica">Crítica</option></select></div>
+        <div class="cell"><textarea class="comentario" id="com_${rowId}" placeholder="Comentario..." rows="2" oninput="state['${rowId}'].comentario=this.value"></textarea></div>
+        <div class="cell"><button class="evidence-btn" id="evbtn_${rowId}" onclick="openEvidence('${rowId}')" title="Adjuntar evidencia">📎<span class="evidence-badge" id="evcount_${rowId}">0</span></button></div>
       `;
 
-      // Style the radio dots
       const dots = row.querySelectorAll('.radio-dot');
       const colors = ['var(--conforme)','var(--no-conforme)','var(--oportunidad)','var(--observacion)'];
       dots.forEach((dot, i) => {
@@ -2188,8 +2136,8 @@ function setHallazgo(rowId, value, radio) {
   updateProgress();
 }
 
-// ── PROGRESS ──────────────────────────────────────────────────────────────────
 function updateProgress() {
+  if (totalRows === 0) return;
   const answered = Object.values(state).filter(s => s.hallazgo !== '').length;
   document.getElementById('progress-text').textContent = `${answered} / ${totalRows} respondidos`;
   document.getElementById('progress-fill').style.width = `${(answered/totalRows*100).toFixed(0)}%`;
@@ -2200,7 +2148,6 @@ function openEvidence(rowId) {
   currentEvidenceRowId = rowId;
   tempEvidence = [...(state[rowId].evidence || [])];
 
-  // Find question text
   let qText = '';
   let idx = 1;
   for (const s of SECTIONS) {
@@ -2210,7 +2157,6 @@ function openEvidence(rowId) {
     }
     if (qText) break;
   }
-  // Fallback: read from DOM
   if (!qText) {
     const row = document.getElementById(rowId);
     if (row) qText = row.querySelector('.pregunta')?.textContent || '';
@@ -2265,25 +2211,12 @@ function saveEvidence() {
   closeModal();
 }
 
-// File input
-document.getElementById('file-input').addEventListener('change', function() {
-  handleFiles(this.files);
-  this.value = '';
-});
-
-document.getElementById('file-cam').addEventListener('change', function() {
-  handleFiles(this.files);
-  this.value = '';
-});
-
-// Drag & Drop
+document.getElementById('file-input').addEventListener('change', function() { handleFiles(this.files); this.value = ''; });
+document.getElementById('file-cam').addEventListener('change', function() { handleFiles(this.files); this.value = ''; });
 const dz = document.getElementById('drop-zone');
 dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
 dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
-dz.addEventListener('drop', e => {
-  e.preventDefault(); dz.classList.remove('dragover');
-  handleFiles(e.dataTransfer.files);
-});
+dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
 
 function handleFiles(files) {
   const arr = Array.from(files).slice(0, 10 - tempEvidence.length);
@@ -2302,27 +2235,19 @@ function handleFiles(files) {
 // ── ACTIONS ───────────────────────────────────────────────────────────────────
 function resetForm() {
   if (!confirm('¿Limpiar todos los datos del formulario?')) return;
-  Object.keys(state).forEach(k => { state[k] = { hallazgo:'', severidad:'', comentario:'', evidence:[] }; });
-  document.querySelectorAll('input[type=radio]').forEach(r => r.checked = false);
-  document.querySelectorAll('.sev-select').forEach(s => s.value = '');
-  document.querySelectorAll('.comentario').forEach(t => t.value = '');
-  document.querySelectorAll('.evidence-btn').forEach(b => b.classList.remove('has-evidence'));
-  document.querySelectorAll('.evidence-badge').forEach(b => b.textContent = '0');
-  document.querySelectorAll('.checklist-row').forEach(r => r.classList.remove('selected-c','selected-nc','selected-om','selected-obs'));
-  document.querySelectorAll('.radio-dot').forEach(d => { d.style.borderColor=''; d.style.background=''; });
-  document.getElementById('meta-fecha').value = '';
+  
+  // Limpiamos la metadata
+  document.getElementById('meta-fecha').value = new Date().toISOString().split('T')[0];
   document.getElementById('meta-hora').value = '';
   document.getElementById('meta-area').value = '';
   document.getElementById('meta-inspector').value = '';
-  updateProgress();
+  
+  // Borramos el formulario de la vista (para que se vuelva a cargar al elegir Área)
+  limpiarVariablesEstado();
 }
 
-
-
-
-// ── INFORME DE HALLAZGOS ──────────────────────────────────────────────────────
+// ── INFORME DE HALLAZGOS Y FILTROS ────────────────────────────────────────────
 const LOGO_B64 = document.querySelector('.header-logo img').src;
-
 let activeFilters = new Set(['nc','obs','om']);
 
 function toggleFilter(chip) {
@@ -2355,11 +2280,14 @@ function openReport() {
   content.innerHTML = '';
   hideSendStatus();
 
-  // Cargar emails del área seleccionada
   const area = document.getElementById('meta-area').value;
+  if (!area) {
+    alert("Por favor, selecciona un área primero.");
+    return;
+  }
+
   loadEmailsForArea(area);
 
-  // Meta bar
   const fecha = document.getElementById('meta-fecha').value || '—';
   const hora  = document.getElementById('meta-hora').value  || '—';
   const areaLabel = area || '—';
@@ -2440,7 +2368,6 @@ function openReport() {
     content.appendChild(noResult);
   }
 
-  // Reset filters to all active
   activeFilters = new Set(['nc','obs','om']);
   document.querySelectorAll('.filter-chip').forEach(c => c.classList.add('active'));
   applyReportFilters();
@@ -2532,14 +2459,8 @@ function printReport() {
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
-buildForm();
-updateProgress();
-
-// Set today's date
 const today = new Date();
 document.getElementById('meta-fecha').value = today.toISOString().split('T')[0];
-
-// Init Drive client once Google SDK loads
 window.addEventListener('load', () => { setTimeout(initDriveClient, 1500); });
 </script>
 </body>
