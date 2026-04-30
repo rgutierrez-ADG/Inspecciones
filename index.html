@@ -1184,15 +1184,19 @@
     <label>Área</label>
     <select id="meta-area">
       <option value="">— Seleccionar área —</option>
-      <option value="Planta Producto Elaborado">Planta Producto Elaborado</option>
-      <option value="Planta HPS1 - Dep. Pulmón HPS1">Planta HPS1 - Dep. Pulmón HPS1</option>
-      <option value="Planta HPS2">Planta HPS2</option>
-      <option value="Planta Blancheado">Planta Blancheado</option>
-      <option value="Planta Alérgenos">Planta Alérgenos</option>
-      <option value="Depósitos D1 - D2 - D3 - Carga y Pre Carga">Depósitos D1 - D2 - D3 - Carga y Pre Carga</option>
-      <option value="Taller de Mantenimiento - Vehículos">Taller de Mantenimiento - Vehículos</option>
-      <option value="Pañol">Pañol</option>
+      <option value="Producción HPS 1 - Depósito pulmón HPS 1">Producción HPS 1 - Depósito pulmón HPS 1</option>
+      <option value="Producción HPS 2">Producción HPS 2</option>
+      <option value="Producción maní blancheado">Producción maní blancheado</option>
+      <option value="Producción producto elaborado Planta 1">Producción producto elaborado Planta 1</option>
+      <option value="Producción planta alérgenos">Producción planta alérgenos</option>
       <option value="Insumos">Insumos</option>
+      <option value="Depósitos: D1 - D2 - D3, Pre-carga y carga de contenedores">Depósitos: D1 - D2 - D3, Pre-carga y carga de contenedores</option>
+      <option value="Descarga, Secado y Celdas">Descarga, Secado y Celdas</option>
+      <option value="Depósito Agroquímicos">Depósito Agroquímicos</option>
+      <option value="Planta Enfardadora">Planta Enfardadora</option>
+      <option value="Laboratorio, Calador y Balanza">Laboratorio, Calador y Balanza</option>
+      <option value="Taller de mantenimiento - Vehículos">Taller de mantenimiento - Vehículos</option>
+      <option value="Pañol">Pañol</option>
     </select>
   </div>
   <div class="meta-field">
@@ -1395,17 +1399,20 @@ const MASTER_SHEET_ID   = '1wynCMBnheTOQLZ8uwrZqQQ3vXDUKx-TsXO5wto0xigA';
 const MASTER_SHEET_NAME = 'Hoja 1'; 
 
 // ── MAPA DE GOOGLE SHEETS POR ÁREA ────────────────────────────────────────────
-// Completar los que faltan con el ID correspondiente a cada planilla
 const MAPA_HOJAS_POR_AREA = {
-  'Planta Producto Elaborado': '1BJo1GXAxhFaBauJ65GDYOWy1sP0oMt9j-w0to2fU9zs',
-  'Planta HPS1 - Dep. Pulmón HPS1': '1-d-cYAncuVo3SfkfUQC-RzsSZfHmXm6bTspArkN6h4A',
-  'Planta HPS2': '1HsGlO3W2ZK71JCnDOKeHGLK1deYLlrD7nMsSnmKHwUg',
-  'Planta Blancheado': '1VwkHynACyAZnBAbNrp4rlJXznDLgaPjIZm8uo9njc7s',
-  'Planta Alérgenos': '', // <--- COMPLETAR CON EL ID CORRESPONDIENTE
-  'Depósitos D1 - D2 - D3 - Carga y Pre Carga': '', // <--- COMPLETAR
-  'Taller de Mantenimiento - Vehículos': '', // <--- COMPLETAR
-  'Pañol': '', // <--- COMPLETAR
-  'Insumos': '' // <--- COMPLETAR
+  'Producción HPS 1 - Depósito pulmón HPS 1': '1BJo1GXAxhFaBauJ65GDYOWy1sP0oMt9j-w0to2fU9zs',
+  'Producción HPS 2': '1BJo1GXAxhFaBauJ65GDYOWy1sP0oMt9j-w0to2fU9zs',
+  'Producción maní blancheado': '1BJo1GXAxhFaBauJ65GDYOWy1sP0oMt9j-w0to2fU9zs',
+  'Producción producto elaborado Planta 1': '1BJo1GXAxhFaBauJ65GDYOWy1sP0oMt9j-w0to2fU9zs',
+  'Producción planta alérgenos': '1BJo1GXAxhFaBauJ65GDYOWy1sP0oMt9j-w0to2fU9zs',
+  'Insumos': '1BJo1GXAxhFaBauJ65GDYOWy1sP0oMt9j-w0to2fU9zs',
+  'Depósitos: D1 - D2 - D3, Pre-carga y carga de contenedores': '1BJo1GXAxhFaBauJ65GDYOWy1sP0oMt9j-w0to2fU9zs',
+  'Descarga, Secado y Celdas': '1-d-cYAncuVo3SfkfUQC-RzsSZfHmXm6bTspArkN6h4A',
+  'Depósito Agroquímicos': '1-d-cYAncuVo3SfkfUQC-RzsSZfHmXm6bTspArkN6h4A',
+  'Planta Enfardadora': '1-d-cYAncuVo3SfkfUQC-RzsSZfHmXm6bTspArkN6h4A',
+  'Laboratorio, Calador y Balanza': '1HsGlO3W2ZK71JCnDOKeHGLK1deYLlrD7nMsSnmKHwUg',
+  'Taller de mantenimiento - Vehículos': '1VwkHynACyAZnBAbNrp4rlJXznDLgaPjIZm8uo9njc7s',
+  'Pañol': '1VwkHynACyAZnBAbNrp4rlJXznDLgaPjIZm8uo9njc7s'
 };
 
 let driveAccessToken = null;
@@ -1742,37 +1749,37 @@ async function exportPDF() {
 
 // ── SEND EMAIL VIA GMAIL ──────────────────────────────────────────────────────
 const AREA_EMAILS = {
-  'Planta Producto Elaborado': [
+  'Producción producto elaborado Planta 1': [
     'produccionpe@maniagro.com',
     'dmartina@maniagro.com',
     'smignola@croppers.com',
     'mbozzo@maniagro.com'
   ],
-  'Planta HPS1 - Dep. Pulmón HPS1': [
+  'Producción HPS 1 - Depósito pulmón HPS 1': [
     'sup.maniconfiteria@maniagro.com',
     'rpratto@maniagro.com',
     'mquiroga@maniagro.com'
   ],
-  'Planta HPS2': [
+  'Producción HPS 2': [
     'sup.hps2@maniagro.com',
     'rpratto@maniagro.com',
     'mquiroga@maniagro.com'
   ],
-  'Planta Blancheado': [
+  'Producción maní blancheado': [
     'sup.maniblancheado@maniagro.com',
     'gprattomaniagro.com',
     'mquiroga@maniagro.com'
   ],
-  'Planta Alérgenos': [
+  'Producción planta alérgenos': [
     'supervisorpecontacc@maniagro.com',
     'smignola@croppers.com',
     'mbozzo@maniagro.com'
   ],
-  'Depósitos D1 - D2 - D3 - Carga y Pre Carga': [
+  'Depósitos: D1 - D2 - D3, Pre-carga y carga de contenedores': [
     'lpratto@maniagro.com',
     'mquiroga@maniagro.com'
   ],
-  'Taller de Mantenimiento - Vehículos': [
+  'Taller de mantenimiento - Vehículos': [
     'mgimenez@maniagro.com'
   ],
   'Pañol': [
@@ -1783,7 +1790,11 @@ const AREA_EMAILS = {
     'insumos@maniagro.com.ar',
     'aaltamirano@maniagro.com',
     'eeroles@maniagro.com'
-  ]
+  ],
+  'Descarga, Secado y Celdas': [],
+  'Depósito Agroquímicos': [],
+  'Planta Enfardadora': [],
+  'Laboratorio, Calador y Balanza': []
 };
 
 let currentRecipients = [];
@@ -1992,20 +2003,37 @@ document.getElementById('meta-area').addEventListener('change', async function()
     const token = await driveAuth();
     if (!token) return;
 
-    // 2. Leemos la pestaña "Check List". Según la imagen, las preguntas empiezan en la fila 8.
-    // Leemos las columnas A (Sección) y B (Criterios)
-    const sheetName = encodeURIComponent('Check List');
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetName}!A8:B200`;
+    // 2. Extraer dinámicamente el nombre real de la pestaña que contenga "check list"
+    const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    if (!metaRes.ok) {
+      throw new Error('No se pudo acceder al archivo. Verificá que tu cuenta de Google tenga permisos de lectura.');
+    }
+    
+    const metaData = await metaRes.json();
+    
+    // Buscamos la pestaña que contenga "check list" ignorando mayúsculas y minúsculas
+    const sheetObj = metaData.sheets.find(s => s.properties.title.toLowerCase().includes('check list'));
+    if (!sheetObj) {
+      throw new Error('No se encontró ninguna pestaña con el nombre "Check List" en este archivo.');
+    }
+    
+    const exactSheetName = encodeURIComponent(sheetObj.properties.title);
+
+    // 3. Leemos la pestaña encontrada a partir de la fila 8
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${exactSheetName}!A8:B200`;
     const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
 
     if (!res.ok) {
-      throw new Error('No se pudo leer la hoja. Revisá permisos o el nombre de la pestaña.');
+      throw new Error('No se pudieron leer los datos de la pestaña. Revisá la estructura del archivo.');
     }
     
     const data = await res.json();
 
     if (!data.values || data.values.length === 0) {
-      alert('La pestaña "Check List" está vacía en este archivo.');
+      alert(`La pestaña "${sheetObj.properties.title}" está vacía o los datos no empiezan en la fila 8.`);
       limpiarVariablesEstado();
       return;
     }
@@ -2013,45 +2041,39 @@ document.getElementById('meta-area').addEventListener('change', async function()
     const nuevasSecciones = [];
     let idSeccionActual = '';
     let objSeccionActual = null;
-    let ultimaSeccionVista = 'General'; // Variable para recordar celdas combinadas
+    let ultimaSeccionVista = 'General'; 
 
-    // 3. Procesamos las filas
+    // 4. Procesamos las filas
     data.values.forEach(row => {
-      // Columna A (índice 0) = Sección
-      // Columna B (índice 1) = Pregunta / Criterio
       let rowSeccion = row[0] ? row[0].trim() : '';
       const rowPregunta = row[1] ? row[1].trim() : '';
 
       // MANEJO DE CELDAS COMBINADAS:
-      // Si la Columna A tiene texto, actualizamos la memoria. Si viene vacía, usamos lo que recordamos.
       if (rowSeccion) {
         ultimaSeccionVista = rowSeccion;
       } else {
         rowSeccion = ultimaSeccionVista;
       }
 
-      // Si hay una pregunta en la Columna B, la agregamos al formulario
       if (rowPregunta) {
         const secId = rowSeccion.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-        // Si cambiamos de sección, creamos un bloque nuevo
         if (idSeccionActual !== secId) {
           objSeccionActual = { id: secId, title: rowSeccion, items: [] };
           nuevasSecciones.push(objSeccionActual);
           idSeccionActual = secId;
         }
-        // Agregamos la pregunta
         objSeccionActual.items.push(rowPregunta);
       }
     });
 
     if (nuevasSecciones.length === 0) {
-      alert('No se encontraron preguntas. Verificá la estructura del archivo.');
+      alert('No se encontraron preguntas válidas. Verificá que la Columna A tenga las Secciones y la Columna B los Criterios.');
       limpiarVariablesEstado();
       return;
     }
 
-    // 4. Dibujamos el formulario en la pantalla
+    // 5. Dibujamos el formulario en la pantalla
     SECTIONS = nuevasSecciones;
     limpiarVariablesEstado(); 
     buildForm();
@@ -2233,7 +2255,7 @@ document.getElementById('file-input').addEventListener('change', function() { ha
 document.getElementById('file-cam').addEventListener('change', function() { handleFiles(this.files); this.value = ''; });
 const dz = document.getElementById('drop-zone');
 dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
-dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+dz.addEventListener('dragleave', () => dz.classList.remove('dragover'); });
 dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
 
 function handleFiles(files) {
@@ -2254,226 +2276,12 @@ function handleFiles(files) {
 function resetForm() {
   if (!confirm('¿Limpiar todos los datos del formulario?')) return;
   
-  // Limpiamos la metadata
   document.getElementById('meta-fecha').value = new Date().toISOString().split('T')[0];
   document.getElementById('meta-hora').value = '';
   document.getElementById('meta-area').value = '';
   document.getElementById('meta-inspector').value = '';
   
-  // Borramos el formulario de la vista
   limpiarVariablesEstado();
-}
-
-// ── INFORME DE HALLAZGOS Y FILTROS ────────────────────────────────────────────
-const LOGO_B64 = document.querySelector('.header-logo img').src;
-let activeFilters = new Set(['nc','obs','om']);
-
-function toggleFilter(chip) {
-  const type = chip.dataset.type;
-  if (activeFilters.has(type)) {
-    activeFilters.delete(type);
-    chip.classList.remove('active');
-  } else {
-    activeFilters.add(type);
-    chip.classList.add('active');
-  }
-  applyReportFilters();
-}
-
-function applyReportFilters() {
-  const items = document.querySelectorAll('#report-content .report-item');
-  let visible = 0;
-  items.forEach(el => {
-    const type = el.dataset.type;
-    if (activeFilters.has(type)) { el.classList.remove('hidden'); visible++; }
-    else el.classList.add('hidden');
-  });
-  const noResult = document.getElementById('report-no-result');
-  if (noResult) noResult.style.display = visible === 0 ? 'block' : 'none';
-  document.getElementById('report-count').textContent = `${visible} hallazgo${visible !== 1 ? 's' : ''}`;
-}
-
-function openReport() {
-  const content = document.getElementById('report-content');
-  content.innerHTML = '';
-  hideSendStatus();
-
-  const area = document.getElementById('meta-area').value;
-  if (!area) {
-    alert("Por favor, selecciona un área primero.");
-    return;
-  }
-
-  loadEmailsForArea(area);
-
-  const fecha = document.getElementById('meta-fecha').value || '—';
-  const hora  = document.getElementById('meta-hora').value  || '—';
-  const areaLabel = area || '—';
-  const insp  = document.getElementById('meta-inspector').value || '—';
-  const sup   = document.getElementById('meta-supervisor').value || '—';
-  document.getElementById('report-meta-bar').innerHTML =
-    `<span><b>Fecha:</b> ${fecha}</span><span><b>Hora:</b> ${hora}</span>` +
-    `<span><b>Área:</b> ${areaLabel}</span><span><b>Inspeccionó:</b> ${insp}</span>` +
-    `<span><b>Supervisor:</b> ${sup}</span>`;
-
-  let globalIdx = 1;
-  let totalHallazgos = 0;
-
-  SECTIONS.forEach(section => {
-    let sectionItems = [];
-
-    section.items.forEach(pregunta => {
-      const rowId = `row_${section.id}_${globalIdx}`;
-      const s = state[rowId];
-      if (s && (s.hallazgo === 'nc' || s.hallazgo === 'obs' || s.hallazgo === 'om')) {
-        sectionItems.push({ num: globalIdx, pregunta, rowId, s });
-        totalHallazgos++;
-      }
-      globalIdx++;
-    });
-
-    if (sectionItems.length > 0) {
-      const secTitle = document.createElement('div');
-      secTitle.className = 'report-section-title';
-      secTitle.textContent = section.title;
-      content.appendChild(secTitle);
-
-      sectionItems.forEach(({ num, pregunta, s }) => {
-        const typeMap = { nc:'No Conforme', obs:'Observación', om:'Oportunidad de Mejora' };
-        const badgeClass = { nc:'badge-nc', obs:'badge-obs', om:'badge-om' };
-        const sevClass = s.severidad ? `sev-${s.severidad.toLowerCase()}` : '';
-
-        let evHtml = '';
-        if (s.evidence && s.evidence.length > 0) {
-          evHtml = `<div class="ri-evidencia-grid">`;
-          s.evidence.forEach(ev => {
-            if (ev.type && ev.type.startsWith('image/')) {
-              evHtml += `<img src="${ev.dataUrl}" alt="${ev.name}" class="ri-ev-img">`;
-            } else {
-              evHtml += `<div class="ri-ev-file">📎 ${ev.name}</div>`;
-            }
-          });
-          evHtml += `</div>`;
-        }
-        const comentHtml = s.comentario
-          ? `<div class="ri-comentario">💬 ${s.comentario}</div>` : '';
-
-        const item = document.createElement('div');
-        item.className = `report-item type-${s.hallazgo}`;
-        item.dataset.type = s.hallazgo;
-        item.innerHTML = `
-          <div class="report-item-num">${String(num).padStart(2,'0')}</div>
-          <div class="report-item-text">
-            <div class="ri-pregunta">${pregunta}</div>
-            ${comentHtml}${evHtml}
-          </div>
-          <span class="badge-tipo ${badgeClass[s.hallazgo]}">${typeMap[s.hallazgo]}</span>
-          ${s.severidad ? `<span class="badge-sev ${sevClass}">${s.severidad}</span>` : '<span></span>'}
-        `;
-        content.appendChild(item);
-      });
-    }
-  });
-
-  if (totalHallazgos === 0) {
-    content.innerHTML = `<div class="report-empty"><div class="re-icon">✅</div>No se registraron No Conformidades ni Observaciones.</div>`;
-  } else {
-    const noResult = document.createElement('div');
-    noResult.id = 'report-no-result';
-    noResult.className = 'report-empty';
-    noResult.style.display = 'none';
-    noResult.innerHTML = '<div class="re-icon">🔍</div>Ningún hallazgo coincide con los filtros activos.';
-    content.appendChild(noResult);
-  }
-
-  activeFilters = new Set(['nc','obs','om']);
-  document.querySelectorAll('.filter-chip').forEach(c => c.classList.add('active'));
-  applyReportFilters();
-
-  document.getElementById('report-modal-overlay').classList.add('open');
-}
-
-function closeReport() {
-  document.getElementById('report-modal-overlay').classList.remove('open');
-}
-
-function printReport() {
-  const wrap = document.getElementById('informe-print-wrap');
-  const fecha = document.getElementById('meta-fecha').value || '—';
-  const hora  = document.getElementById('meta-hora').value  || '—';
-  const area  = document.getElementById('meta-area').value  || '—';
-  const insp  = document.getElementById('meta-inspector').value || '—';
-  const sup   = document.getElementById('meta-supervisor').value || '—';
-
-  let html = `
-    <div class="informe-print-header">
-      <img src="${LOGO_B64}" alt="Maniagro Argentina">
-      <div class="informe-print-header-text">
-        <h2>Informe de Hallazgos — Check List de Inspecciones Internas</h2>
-        <p>R-SIG-II 02 | Rev. 5 | Generado: ${new Date().toLocaleString('es-AR')}</p>
-      </div>
-    </div>
-    <div class="informe-print-meta">
-      <span><b>Fecha:</b> ${fecha}</span>
-      <span><b>Hora:</b> ${hora}</span>
-      <span><b>Área:</b> ${area}</span>
-      <span><b>Inspeccionó:</b> ${insp}</span>
-      <span><b>Supervisor:</b> ${sup}</span>
-    </div>`;
-
-  let globalIdx = 1;
-  let counts = { nc: 0, obs: 0, om: 0 };
-
-  SECTIONS.forEach(section => {
-    let sectionHtml = '';
-    section.items.forEach(pregunta => {
-      const rowId = `row_${section.id}_${globalIdx}`;
-      const s = state[rowId];
-      if (s && (s.hallazgo === 'nc' || s.hallazgo === 'obs' || s.hallazgo === 'om')) {
-        if (!activeFilters.has(s.hallazgo)) { globalIdx++; return; }
-        counts[s.hallazgo]++;
-        const typeMap = { nc:'No Conforme', obs:'Observación', om:'Oportunidad de Mejora' };
-        const sevClass = s.severidad ? s.severidad.toLowerCase() : '';
-        const sevHtml = s.severidad ? `<span class="ipi-sev ${sevClass}">${s.severidad}</span>` : '';
-        const comentHtml = s.comentario ? `<em>💬 ${s.comentario}</em>` : '';
-        let evHtml = '';
-        if (s.evidence && s.evidence.length > 0) {
-          evHtml = '<div class="informe-print-ev">';
-          s.evidence.forEach(ev => {
-            if (ev.type && ev.type.startsWith('image/')) {
-              evHtml += `<img src="${ev.dataUrl}" alt="${ev.name}">`;
-            } else {
-              evHtml += `<span style="font-size:9px;color:#555;">📎 ${ev.name}</span> `;
-            }
-          });
-          evHtml += '</div>';
-        }
-        sectionHtml += `
-          <div class="informe-print-item type-${s.hallazgo}">
-            <div class="ipi-num">${String(globalIdx).padStart(2,'0')}</div>
-            <div class="ipi-text"><b>${pregunta}</b>${comentHtml}${evHtml}</div>
-            <span class="ipi-badge ${s.hallazgo}">${typeMap[s.hallazgo]}</span>
-            ${sevHtml}
-          </div>`;
-      }
-      globalIdx++;
-    });
-    if (sectionHtml) {
-      html += `<div class="informe-print-section">${section.title}</div>${sectionHtml}`;
-    }
-  });
-
-  const total = counts.nc + counts.obs + counts.om;
-  html += `<div class="informe-print-totals">
-    <span><b>Total hallazgos:</b> ${total}</span>
-    <span><b>No Conformes:</b> ${counts.nc}</span>
-    <span><b>Observaciones:</b> ${counts.obs}</span>
-    <span><b>Oportunidades de Mejora:</b> ${counts.om}</span>
-  </div>`;
-
-  wrap.innerHTML = html;
-  document.body.classList.add('printing-report');
-  showPrintTip(() => { window.print(); document.body.classList.remove('printing-report'); });
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
