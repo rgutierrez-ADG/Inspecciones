@@ -1981,45 +1981,55 @@ let tempEvidence = [];
 let totalRows = 0;
 
 // ── LEER ENCABEZADO DEL CHECK LIST DESDE LA HOJA ──────────────────────────────
+// Estructura esperada en el Sheet:
+//   I1 = "Rev. N"            J1 = "R-SIG-II XX"
+//   I2 = "Fecha DD/MM/YY"    J2 = "Pág. X de Y"
 async function actualizarEncabezadoDesdeSheet(sheetId, sheetName, token) {
   try {
-    const range = `${encodeURIComponent(sheetName)}!A1:H7`;
-    const res = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}`,
-      { headers: { 'Authorization': `Bearer ${token}` } }
-    );
-    if (!res.ok) return;
+    const range = `${encodeURIComponent(sheetName)}!I1:J2`;
+    const url   = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}`;
 
-    const data = await res.json();
-    if (!data.values) return;
+    console.log('[HEADER] Leyendo:', sheetName, '→', url);
 
-    // Aplanamos todas las celdas del encabezado en un solo array de strings
-    const celdas = data.values.flat().map(c => (c || '').toString().trim()).filter(Boolean);
-
-    // Patrones a buscar (R-SIG-II 02, R-SIG-II 07, R-SIG-II 08, R-SIG-II 09, etc.)
-    const reCodigo = /R-SIG[-\s]?[A-Z]+\s*\d+/i;
-    const reRev    = /Rev\.?\s*\d+/i;
-    const rePag    = /P[áa]g\.?\s*\d+\s*de\s*\d+/i;
-    const reFecha  = /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/;
-
-    let codigo, rev, pag, fecha;
-    celdas.forEach(txt => {
-      if (!codigo && reCodigo.test(txt)) codigo = txt.match(reCodigo)[0].toUpperCase().replace(/\s+/g, ' ');
-      if (!rev    && reRev.test(txt))    rev    = txt.match(reRev)[0];
-      if (!pag    && rePag.test(txt))    pag    = txt.match(rePag)[0];
-      if (!fecha  && reFecha.test(txt))  fecha  = txt.match(reFecha)[0];
+    const res = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${token}` }
     });
 
-    // Actualizar DOM (si no se encontró un campo, lo dejamos como estaba)
+    if (!res.ok) {
+      console.warn('[HEADER] HTTP error:', res.status, await res.text());
+      return;
+    }
+
+    const data = await res.json();
+    console.log('[HEADER] Respuesta cruda I1:J2 →', data.values);
+
+    if (!data.values || data.values.length === 0) {
+      console.warn('[HEADER] No hay valores en el rango I1:J2');
+      return;
+    }
+
+    const fila1 = data.values[0] || [];
+    const fila2 = data.values[1] || [];
+
+    const rev     = (fila1[0] || '').toString().trim();   // I1 → "Rev. 5"
+    const codigo  = (fila1[1] || '').toString().trim();   // J1 → "R-SIG-II 02"
+    const fechaR  = (fila2[0] || '').toString().trim();   // I2 → "Fecha 10/03/26"
+    const pag     = (fila2[1] || '').toString().trim();   // J2 → "Pág. 1 de 2"
+
+    // Sacamos el prefijo "Fecha " del valor de I2
+    const fecha = fechaR.replace(/^fecha\s*/i, '').trim();
+
+    console.log('[HEADER] Extraído →', { codigo, rev, pag, fecha });
+
     if (codigo) document.getElementById('hdr-codigo').textContent = codigo;
     if (rev)    document.getElementById('hdr-rev').textContent    = rev;
     if (pag)    document.getElementById('hdr-pag').textContent    = pag;
     if (fecha)  document.getElementById('hdr-fecha').textContent  = fecha;
 
-    // También actualizamos el <title> de la pestaña del navegador
+    // Título de la pestaña del navegador
     if (codigo) document.title = `${codigo} — Check List de Inspecciones Internas`;
   } catch (err) {
-    console.warn('No se pudo leer el encabezado del Sheet:', err);
+    console.error('[HEADER] Error:', err);
   }
 }
 
@@ -2066,7 +2076,7 @@ document.getElementById('meta-area').addEventListener('change', async function()
     const exactSheetName = encodeURIComponent(sheetObj.properties.title);
 
     // Leer y aplicar el encabezado del checklist (código/rev/pág/fecha)
-    actualizarEncabezadoDesdeSheet(sheetId, sheetObj.properties.title, token);
+    await actualizarEncabezadoDesdeSheet(sheetId, sheetObj.properties.title, token);
 
     // 3. Leemos la pestaña encontrada a partir de la fila 8
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${exactSheetName}!A8:B200`;
