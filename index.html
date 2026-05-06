@@ -1847,6 +1847,290 @@ function hideSendStatus() {
   document.getElementById('send-status').className = 'send-status';
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// INFORME DE HALLAZGOS — Abrir / Cerrar / Filtrar / Imprimir
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const TIPO_LABEL = {
+  nc:  'No Conforme',
+  om:  'Oportunidad de Mejora',
+  obs: 'Observación'
+};
+const TIPO_COLORS = {
+  nc:  { bg: '#fdecea', border: '#c0392b' },
+  om:  { bg: '#fef3ec', border: '#d35400' },
+  obs: { bg: '#f5f5f5', border: '#7f8c8d' }
+};
+const SEV_COLORS = {
+  'Crítica': '#c0392b',
+  'Mayor':   '#e67e22',
+  'Menor':   '#3498db'
+};
+
+function escapeHtml(s) {
+  return (s == null ? '' : s.toString())
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function recolectarHallazgos() {
+  const items = [];
+  let gIdx = 1;
+  SECTIONS.forEach(section => {
+    section.items.forEach(pregunta => {
+      const rowId = `row_${section.id}_${gIdx}`;
+      const s = state[rowId];
+      if (s && (s.hallazgo === 'nc' || s.hallazgo === 'om' || s.hallazgo === 'obs')) {
+        items.push({
+          gIdx, rowId,
+          seccion:    section.title,
+          pregunta,
+          tipo:       s.hallazgo,
+          severidad:  s.severidad || '',
+          comentario: s.comentario || '',
+          evidence:   s.evidence || []
+        });
+      }
+      gIdx++;
+    });
+  });
+  return items;
+}
+
+function openReport() {
+  if (!Array.isArray(SECTIONS) || SECTIONS.length === 0) {
+    alert('⚠️ Primero seleccioná un área para cargar el check list.');
+    return;
+  }
+  const hallazgos = recolectarHallazgos();
+  if (hallazgos.length === 0) {
+    alert('⚠️ No hay hallazgos cargados. Marcá al menos un ítem como No Conforme, Oportunidad de Mejora u Observación.');
+    return;
+  }
+
+  const fecha      = document.getElementById('meta-fecha').value      || '—';
+  const hora       = document.getElementById('meta-hora').value       || '—';
+  const area       = document.getElementById('meta-area').value       || '—';
+  const inspector  = document.getElementById('meta-inspector').value  || '—';
+  const supervisor = document.getElementById('meta-supervisor').value || '—';
+
+  document.getElementById('report-meta-bar').innerHTML = `
+    <span><b>Fecha:</b> ${escapeHtml(fecha)}</span>
+    <span><b>Hora:</b> ${escapeHtml(hora)}</span>
+    <span><b>Área:</b> ${escapeHtml(area)}</span>
+    <span><b>Inspeccionó:</b> ${escapeHtml(inspector)}</span>
+    <span><b>Supervisor:</b> ${escapeHtml(supervisor)}</span>
+  `;
+
+  const codigo = document.getElementById('hdr-codigo').textContent || 'R-SIG-II';
+  const subt   = document.getElementById('report-subtitle');
+  if (subt) subt.textContent = `${codigo} — Ítems marcados como No Conforme, Oportunidad de Mejora u Observación`;
+
+  // Reset chips a "todos activos"
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.add('active'));
+
+  renderReportContent(hallazgos);
+  loadEmailsForArea(area);
+
+  const ss = document.getElementById('send-status');
+  if (ss) ss.innerHTML = '';
+
+  document.getElementById('report-modal-overlay').classList.add('open');
+}
+
+function closeReport() {
+  document.getElementById('report-modal-overlay').classList.remove('open');
+}
+
+function renderReportContent(hallazgos) {
+  const container = document.getElementById('report-content');
+  container.innerHTML = '';
+
+  // Agrupar por sección
+  const porSeccion = {};
+  hallazgos.forEach(h => {
+    (porSeccion[h.seccion] = porSeccion[h.seccion] || []).push(h);
+  });
+
+  Object.keys(porSeccion).forEach(seccionTitle => {
+    const sec = document.createElement('div');
+    sec.style.cssText = 'font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#1B5E99;margin:14px 0 6px;padding-bottom:4px;border-bottom:1px solid #1B5E99;';
+    sec.textContent = seccionTitle;
+    container.appendChild(sec);
+
+    porSeccion[seccionTitle].forEach(h => {
+      const t = TIPO_COLORS[h.tipo];
+      const item = document.createElement('div');
+      item.className = 'report-item-modal';
+      item.dataset.tipo = h.tipo;
+      item.style.cssText = `display:grid;grid-template-columns:30px 1fr auto auto;gap:10px;align-items:start;padding:10px 12px;margin-bottom:8px;background:${t.bg};border-left:3px solid ${t.border};border-radius:4px;font-size:12px;`;
+
+      const sevColor = SEV_COLORS[h.severidad];
+      const sevHtml  = sevColor
+        ? `<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;background:${sevColor};color:#fff;white-space:nowrap;">${escapeHtml(h.severidad)}</span>`
+        : '<span></span>';
+
+      let evHtml = '';
+      if (h.evidence && h.evidence.length > 0) {
+        const imgs = h.evidence.map(ev =>
+          ev.type && ev.type.startsWith('image/')
+            ? `<img src="${ev.dataUrl}" style="width:80px;height:60px;object-fit:cover;border:1px solid #ccc;border-radius:3px;">`
+            : `<div style="font-size:10px;color:#555;padding:4px;background:#fff;border:1px solid #ddd;border-radius:3px;">📎 ${escapeHtml(ev.name)}</div>`
+        ).join('');
+        evHtml = `<div style="grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">${imgs}</div>`;
+      }
+
+      item.innerHTML = `
+        <div style="font-size:10px;color:#aaa;font-weight:700;padding-top:2px;">${String(h.gIdx).padStart(2,'0')}.</div>
+        <div>
+          <div style="font-weight:600;color:#222;line-height:1.4;">${escapeHtml(h.pregunta)}</div>
+          ${h.comentario ? `<div style="font-size:11px;color:#555;margin-top:4px;font-style:italic;">${escapeHtml(h.comentario)}</div>` : ''}
+        </div>
+        <span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;background:${t.border};color:#fff;white-space:nowrap;">${TIPO_LABEL[h.tipo]}</span>
+        ${sevHtml}
+        ${evHtml}
+      `;
+      container.appendChild(item);
+    });
+  });
+
+  // Totales
+  const tot = { nc:0, om:0, obs:0 };
+  hallazgos.forEach(h => tot[h.tipo]++);
+  const totals = document.createElement('div');
+  totals.style.cssText = 'margin-top:18px;padding:10px 14px;background:#f0f4f8;border-radius:4px;font-size:12px;display:flex;gap:24px;flex-wrap:wrap;';
+  totals.innerHTML = `
+    <span><b style="color:#1B5E99;">Total:</b> ${hallazgos.length}</span>
+    <span><b style="color:#c0392b;">No Conformes:</b> ${tot.nc}</span>
+    <span><b style="color:#d35400;">Oportunidades:</b> ${tot.om}</span>
+    <span><b style="color:#7f8c8d;">Observaciones:</b> ${tot.obs}</span>
+  `;
+  container.appendChild(totals);
+
+  actualizarFiltroContador();
+}
+
+function toggleFilter(el) {
+  el.classList.toggle('active');
+  const tiposActivos = Array.from(document.querySelectorAll('.filter-chip.active'))
+    .map(c => c.dataset.type);
+
+  document.querySelectorAll('#report-content .report-item-modal').forEach(item => {
+    item.style.display = tiposActivos.includes(item.dataset.tipo) ? '' : 'none';
+  });
+  actualizarFiltroContador();
+}
+
+function actualizarFiltroContador() {
+  const all      = document.querySelectorAll('#report-content .report-item-modal');
+  const visibles = Array.from(all).filter(it => it.style.display !== 'none').length;
+  const counter  = document.getElementById('report-count');
+  if (counter) counter.textContent = `${visibles} de ${all.length} hallazgos visibles`;
+}
+
+function printReport() {
+  const hallazgos = recolectarHallazgos();
+  if (hallazgos.length === 0) {
+    alert('⚠️ No hay hallazgos para imprimir.');
+    return;
+  }
+
+  const fecha      = document.getElementById('meta-fecha').value      || '—';
+  const hora       = document.getElementById('meta-hora').value       || '—';
+  const area       = document.getElementById('meta-area').value       || '—';
+  const inspector  = document.getElementById('meta-inspector').value  || '—';
+  const supervisor = document.getElementById('meta-supervisor').value || '—';
+  const codigo     = document.getElementById('hdr-codigo').textContent || 'R-SIG-II';
+  const logoSrc    = document.querySelector('.header-logo img').src;
+
+  // Respetar filtros activos
+  const tiposActivos = Array.from(document.querySelectorAll('.filter-chip.active'))
+    .map(c => c.dataset.type);
+  const hallazgosFiltrados = hallazgos.filter(h => tiposActivos.includes(h.tipo));
+
+  // Agrupar por sección
+  const porSeccion = {};
+  hallazgosFiltrados.forEach(h => {
+    (porSeccion[h.seccion] = porSeccion[h.seccion] || []).push(h);
+  });
+
+  let html = `
+    <div class="informe-print-header">
+      <img src="${logoSrc}" alt="Maniagro">
+      <div class="informe-print-header-text">
+        <h2>⚠️ Informe de Hallazgos — Inspección Interna</h2>
+        <p>${escapeHtml(codigo)} | Maniagro Argentina | ${new Date().toLocaleString('es-AR')}</p>
+      </div>
+    </div>
+    <div class="informe-print-meta">
+      <span><b>Fecha:</b> ${escapeHtml(fecha)}</span>
+      <span><b>Hora:</b> ${escapeHtml(hora)}</span>
+      <span><b>Área:</b> ${escapeHtml(area)}</span>
+      <span><b>Inspeccionó:</b> ${escapeHtml(inspector)}</span>
+      <span><b>Supervisor:</b> ${escapeHtml(supervisor)}</span>
+    </div>
+  `;
+
+  Object.keys(porSeccion).forEach(seccionTitle => {
+    html += `<div class="informe-print-section">${escapeHtml(seccionTitle)}</div>`;
+    porSeccion[seccionTitle].forEach(h => {
+      const sevClass = h.severidad
+        ? h.severidad.toLowerCase().replace(/í/g,'i').replace(/[^a-z]/g,'')
+        : '';
+      const sevHtml = h.severidad
+        ? `<span class="ipi-sev ${sevClass}">${escapeHtml(h.severidad)}</span>`
+        : '';
+
+      let evHtml = '';
+      if (h.evidence && h.evidence.length > 0) {
+        const imgs = h.evidence
+          .filter(ev => ev.type && ev.type.startsWith('image/'))
+          .map(ev => `<img src="${ev.dataUrl}" alt="${escapeHtml(ev.name)}">`)
+          .join('');
+        if (imgs) evHtml = `<div class="informe-print-ev" style="grid-column:1/-1;">${imgs}</div>`;
+      }
+
+      html += `
+        <div class="informe-print-item type-${h.tipo}">
+          <div class="ipi-num">${String(h.gIdx).padStart(2,'0')}.</div>
+          <div class="ipi-text">
+            <b>${escapeHtml(h.pregunta)}</b>
+            ${h.comentario ? `<em>${escapeHtml(h.comentario)}</em>` : ''}
+          </div>
+          <span class="ipi-badge ${h.tipo}">${TIPO_LABEL[h.tipo]}</span>
+          ${sevHtml}
+          ${evHtml}
+        </div>
+      `;
+    });
+  });
+
+  const tot = { nc:0, om:0, obs:0 };
+  hallazgosFiltrados.forEach(h => tot[h.tipo]++);
+  html += `
+    <div class="informe-print-totals">
+      <span><b>Total:</b> ${hallazgosFiltrados.length}</span>
+      <span><b>No Conformes:</b> ${tot.nc}</span>
+      <span><b>Oportunidades:</b> ${tot.om}</span>
+      <span><b>Observaciones:</b> ${tot.obs}</span>
+    </div>
+  `;
+
+  document.getElementById('informe-print-wrap').innerHTML = html;
+
+  showPrintTip(() => {
+    document.body.classList.add('printing-report');
+    setTimeout(() => {
+      window.print();
+      setTimeout(() => {
+        document.body.classList.remove('printing-report');
+      }, 500);
+    }, 100);
+  });
+}
+
 async function sendEmailReport() {
   if (currentRecipients.length === 0) {
     showSendStatus('error', '⚠️ No hay destinatarios. Agregá al menos un correo.');
